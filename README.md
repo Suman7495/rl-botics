@@ -1,5 +1,5 @@
 # Overview
-This repository contains a set of popular Deep Reinforcement Learning algorithms tested on OpenAI's Gym. The objective was to have simple and clear implementations.
+RL-botics is a toolbox containing state-of-the-art implemntations of deep Reinforcement Learning algorithms.
 
 Each folder corresponds to a particular algorithm which contains the required theoretical material to get started.
 
