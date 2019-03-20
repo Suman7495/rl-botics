@@ -1,5 +1,5 @@
 # Overview
-This repository contains a set of popular Deep Reinforcement Learning algorithms tested on OpenAI's Gym. The objective was to have simple and clear implementations.
+This repository contains a deep Reinforcement Learning toolbox with numerous state-of-the-art algorithms tested on OpenAI's Gym. 
 
 Each folder corresponds to a particular algorithm which contains the required theoretical material to get started.
 
