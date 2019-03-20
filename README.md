@@ -15,7 +15,7 @@ cd rl-botics
 
 To run any of the algorithms, go to the specific directory and run `main.py`. For example:
 ```
-cd COPOS
+cd copos
 python main.py
 ```
 Additionally, you can enter optional commands. For example:
