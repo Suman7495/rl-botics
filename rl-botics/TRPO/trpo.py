@@ -81,6 +81,8 @@ class TRPO:
         # Surrogate Loss
         self.surrogate_loss = -tf.reduce_mean(prob_ratio*self.adv)
 
+        # TODO: Finish this section
+
     def _init_session(self):
             """Launch TensorFlow session and initialize variables"""
             self.sess = tf.Session(graph=self.g)
