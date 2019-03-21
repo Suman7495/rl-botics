@@ -58,8 +58,8 @@ class TRPO:
             Build the policy
         """
         # Create the neural network with the Softmax function as output layer
-        # TODO: Build policy
-        output = MLP()
+        # TODO: Verify policy is correctly created
+        output = MLP(self.obs_dim, pi_sizes, pi_activations, scope='policy')
         self.pi = SoftmaxPolicy(self.sess, output)
 
         # TODO: set action bounds
