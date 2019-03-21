@@ -20,7 +20,7 @@ class TRPO:
         self.obs_dim = self.env.observation_space.shape[0]
         self.act_dim = self.env.action_space.n
         self.render = True
-
+        self.env_continuous = False
         # Hyperparameters
         self.lr = args.lr
         self.gamma = args.gamma
@@ -59,8 +59,8 @@ class TRPO:
         """
         # Create the neural network with the Softmax function as output layer
         # TODO: Figure out how to introduce the session
-        output = MLP(self.obs_dim, pi_sizes, pi_activations, scope='policy')
-        self.pi = SoftmaxPolicy(self.g, output)
+        self.pi_net = MLP(self.obs_dim, pi_sizes, pi_activations, scope='policy')
+        self.pi = SoftmaxPolicy(self.sess, self.pi_net)
 
     def _build_value_function(self):
         """
@@ -76,7 +76,26 @@ class TRPO:
         prob_ratio = tf.exp(self.pi.log_prob - self.old_log_probs)
 
         # Surrogate Loss
+        if self.env_continuous:
+            self.params = self.pi_net.vars
+        else:
+            self.params = [self.pi_net.vars, self.pi.vars]
         self.surrogate_loss = -tf.reduce_mean(prob_ratio*self.adv)
+        self.pg = flatgrad(self.surrogate_loss, self.params)
+
+        self.shapes = [v.shape.as_list() for v in self.params]
+        size_params = np.sum([np.prod(shape) for shape in self.shapes])
+
+        self.flat_tangents = tf.placeholder(tf.float32, (size_params,), name='flat_tangents')
+        grads = tf.gradients(pi.kl, self.params)
+        tangents = []
+        start = 0
+        for shape in self.shapes:
+            size = np.prod(shape)
+            tangents.append(tf.reshape(self.p[start:start + size], shape))
+            start += size
+        gvp = tf.add_n([tf.reduce_sum(g * tangent) for (g, tangent) in zip(grads, tangents)])
+        self.hvp = flatgrad(gvp, self.params)
         # TODO: Finish this section
 
     def _init_session(self):
@@ -88,6 +107,11 @@ class TRPO:
             Train using TRPO algorithm
         """
         # TODO: Finish this section
+
+    def update(self):
+        """
+            Update policy parameters
+        """
 
     def print_results(self):
         """
