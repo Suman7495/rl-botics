@@ -5,8 +5,10 @@ import numpy as np
 import random
 import matplotlib.pyplot as plt
 from collections import deque
-from .utils import *
+
 from common import *
+from .hyperparameters import *
+from .utils import *
 
 class TRPO:
     def __init__(self, args, sess):
@@ -58,21 +60,17 @@ class TRPO:
             Build the policy
         """
         # Create the neural network with the Softmax function as output layer
-        # TODO: Verify policy is correctly created
+        # TODO: Figure out how to introduce the session
         output = MLP(self.obs_dim, pi_sizes, pi_activations, scope='policy')
-        self.pi = SoftmaxPolicy(self.sess, output)
-
-        # TODO: set action bounds
-
-        self.act_dist = tfp.distributions.MultivariateNormalDiag(self.mean, self.std)
+        self.pi = SoftmaxPolicy(self.g, output)
 
     def _build_value_function(self):
         """
             Value function
         """
+        return
 
-
-    def _loss_(self):
+    def _loss(self):
         """
             Compute loss
         """
@@ -81,7 +79,6 @@ class TRPO:
 
         # Surrogate Loss
         self.surrogate_loss = -tf.reduce_mean(prob_ratio*self.adv)
-
         # TODO: Finish this section
 
     def _init_session(self):
@@ -93,10 +90,11 @@ class TRPO:
         """
             Train using TRPO algorithm
         """
-
+        # TODO: Finish this section
 
     def print_results(self):
         """
             Plot the results
         """
+        # TODO: Finish this section
         return

@@ -23,4 +23,4 @@ def rollout(env, agent, render=True, timestep_limit=1000):
 
         obs = new_obs
 
-# TODO: Add functions to class
+# TODO: add function to perform rollouts
