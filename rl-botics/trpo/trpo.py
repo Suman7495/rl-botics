@@ -9,7 +9,7 @@ from .utils import *
 from common import *
 
 class TRPO:
-    def __init__(self, args):
+    def __init__(self, args, sess):
         """
         Initialize COPOS agent class
         """
@@ -28,7 +28,7 @@ class TRPO:
         # Initialize empty reward list
         self.rew_list = []
 
-        # Build policy model
+        # Build Tensorflow graph
         self._build_graph()
         self._init_session()
 

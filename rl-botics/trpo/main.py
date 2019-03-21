@@ -16,11 +16,10 @@ def main():
     parser.add_argument('--cg_damping', type=float, default=1e-1)
     args = parser.parse_args()
 
-    with tf.Session() as sess:
-        agent = TRPO(args, sess)
-        print("Training agent...\n")
-        agent.train()
-        agent.print_results()
+    agent = TRPO(args, sess)
+    print("Training agent...\n")
+    agent.train()
+    agent.print_results()
 
 if __name__ == '__main__':
     main()
