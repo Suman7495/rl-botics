@@ -1,3 +1,7 @@
+"""
+    Default hyperparameters
+"""
+
 pi_sizes           = [64, 64]
 pi_activations     = ['tanh', 'tanh']
 maxiter            = 10000      # number of learning iterations

@@ -1,3 +1,6 @@
+from collections import deque
+
+
 def rollout(env, agent, render=True, timestep_limit=1000):
     """
         Simulate the agent for fixed timesteps

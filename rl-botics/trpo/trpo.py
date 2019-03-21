@@ -4,7 +4,6 @@ import tensorflow_probability as tfp
 import numpy as np
 import random
 import matplotlib.pyplot as plt
-from collections import deque
 
 from common import *
 from .hyperparameters import *
@@ -16,6 +15,7 @@ class TRPO:
         Initialize COPOS agent class
         """
         env = gym.make(args.env)
+        self.sess = sess
         self.env = env
         self.obs_dim = self.env.observation_space.shape[0]
         self.act_dim = self.env.action_space.n
@@ -36,13 +36,11 @@ class TRPO:
 
     def _build_graph(self):
         """Build Tensorflow graph"""
-        self.g = tf.Graph()
-        with self.g.as_default():
-            self._init_placeholders()
-            self._build_policy()
-            self._build_value_function()
-            self._loss()
-            self.init = tf.global_variables_initializer()
+        self._init_placeholders()
+        self._build_policy()
+        self._build_value_function()
+        self._loss()
+        self.init = tf.global_variables_initializer()
 
     def _init_placeholders(self):
         """
@@ -83,7 +81,6 @@ class TRPO:
 
     def _init_session(self):
             """Launch TensorFlow session and initialize variables"""
-            self.sess = tf.Session(graph=self.g)
             self.sess.run(self.init)
 
     def train(self):
