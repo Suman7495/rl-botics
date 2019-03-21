@@ -21,6 +21,7 @@ class TRPO:
         self.act_dim = self.env.action_space.n
         self.render = True
         self.env_continuous = False
+
         # Hyperparameters
         self.lr = args.lr
         self.gamma = args.gamma
