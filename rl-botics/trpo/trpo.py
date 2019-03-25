@@ -13,6 +13,7 @@ class TRPO:
     def __init__(self, args, sess):
         """
         Initialize COPOS agent class
+        Test Update
         """
         env = gym.make(args.env)
         self.sess = sess
