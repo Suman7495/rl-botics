@@ -169,6 +169,7 @@ class TRPO:
     def train(self):
         """
             Train using TRPO algorithm
+            Test Git
         """
         for itr in range(self.maxiter):
             trajectories = get_trajectories(self.env, agent=pi)
