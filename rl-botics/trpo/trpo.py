@@ -50,6 +50,8 @@ class TRPO:
         self.obs = tf.placeholder(dtype=tf.float32, shape=[None, self.obs_dim], name='obs')
         self.act = tf.placeholder(dtype=tf.float32, shape=[None, self.act_dim], name='act')
         self.adv = tf.placeholder(dtype=tf.float32, shape=[None, 1], name='adv')
+
+        # Placeholders below might not be required
         self.old_log_probs = tf.placeholder(dtype=tf.float32, shape=[None, 1], name='old_log_probs')
         self.old_std = tf.placeholder(dtype=tf.float32, shape=[None, self.act_dim], name='old_std')
         self.old_mean = tf.placeholder(dtype=tf.float32, shape=[None, self.obs_dim], name='old_mean')
@@ -130,7 +132,7 @@ class TRPO:
     def get_flat_params(self):
         return self.sess.run(self.flat_params)
 
-    def set_params_flat(self, params):
+    def set_flat_params(self, params):
         feed_dict = {self.flat_params_ph: params}
         self.sess.run(self.param_update, feed_dict=feed_dict)
 
@@ -148,7 +150,7 @@ class TRPO:
             return self.sess.run(self.hvp, dct) + self.cg_damping * p
 
         def get_loss(params):
-            self.set_params_flat(params)
+            self.set_flat_params(params)
             return self.sess.run([self.loss, self.kl], dct)
 
         pg = get_pg()  # vanilla gradient
@@ -161,7 +163,7 @@ class TRPO:
         fullstep = stepdir / lm
         expected_improve = -pg.dot(stepdir) / lm
         success, new_params = linesearch(get_loss, prev_params, fullstep, expected_improve, self.kl_bound)
-        self.set_params_flat(new_params)
+        self.set_flat_params(new_params)
 
 
     def train(self):
@@ -177,12 +179,25 @@ class TRPO:
             # Estimate advantage
             # TODO: Complete section on Advantage Estimation
 
+            # Old policy
+            self.old_log_prob = pi.log_prob
+            self.old_mean =
+            self.old_std =
+
             # Update policy
-            old_log_prob
+            feed_dict = {}
+            loss_before = self.sess.run()
+            self.update(feed_dict)
+            loss_after = self.sess.run()
 
+            # Evaluate policy
+            avg_rew =
+            entropy =
+            kl =
 
-        # TODO: Finish this section
+            # Log data
 
+        self.sess.close()
 
     def print_results(self):
         """
