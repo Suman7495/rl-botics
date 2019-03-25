@@ -159,7 +159,7 @@ class TRPO:
             return
         stepdir = cg(f_Ax=get_hvp, b=-pg)  # natural gradient direction
         shs = 0.5 * stepdir.dot(get_hvp(stepdir))
-        lm = np.sqrt(shs / self.kl_bound)  # optimal stepsize (see Eq 3-5 in https://arxiv.org/pdf/1703.02660.pdf)
+        lm = np.sqrt(shs / self.kl_bound)
         fullstep = stepdir / lm
         expected_improve = -pg.dot(stepdir) / lm
         success, new_params = linesearch(get_loss, prev_params, fullstep, expected_improve, self.kl_bound)
@@ -169,7 +169,6 @@ class TRPO:
     def train(self):
         """
             Train using TRPO algorithm
-            Test Git 2.0
         """
         for itr in range(self.maxiter):
             trajectories = get_trajectories(self.env, agent=pi)
