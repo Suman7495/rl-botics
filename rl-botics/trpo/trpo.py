@@ -130,7 +130,7 @@ class TRPO:
     def get_flat_params(self):
         return self.sess.run(self.flat_params)
 
-    def update_param(self, params):
+    def set_params_flat(self, params):
         feed_dict = {self.flat_params_ph: params}
         self.sess.run(self.param_update, feed_dict=feed_dict)
 
@@ -148,7 +148,7 @@ class TRPO:
             return self.sess.run(self.hvp, dct) + self.cg_damping * p
 
         def get_loss(params):
-            self.update_param(params)
+            self.set_params_flat(params)
             return self.sess.run([self.loss, self.kl], dct)
 
         pg = get_pg()  # vanilla gradient
@@ -161,8 +161,7 @@ class TRPO:
         fullstep = stepdir / lm
         expected_improve = -pg.dot(stepdir) / lm
         success, new_params = linesearch(get_loss, prev_params, fullstep, expected_improve, self.kl_bound)
-
-        self.update_param(new_params)
+        self.set_params_flat(new_params)
 
 
     def train(self):
