@@ -14,11 +14,10 @@ class TRPO:
         """
         Initialize COPOS agent class
         """
-        env = gym.make(args.env)
         self.sess = sess
-        self.env = env
+        self.env = gym.make(args.env)
         self.obs_dim = self.env.observation_space.shape[0]
-        self.act_dim = self.env.action_space.n
+        self.act_dim = self.env.action_space.shape[0]
         self.render = True
         self.env_continuous = False
 
@@ -119,16 +118,21 @@ class TRPO:
 
         assert start == self.size_params, "Wrong shapes."
 
+        # TODO: Finish this section
+        self.kl = kl(self.pi, self.old_pi)
+        self.entropy =
+        self.loss = self.surrogate_loss
+
     def _init_session(self):
             """Launch TensorFlow session and initialize variables"""
             self.sess.run(self.init)
 
+    def get_flat_params(self):
+        return self.sess.run(self.flat_params)
+
     def update_param(self, params):
         feed_dict = {self.flat_params_ph: params}
         self.sess.run(self.param_update, feed_dict=feed_dict)
-
-    def get_flat_params(self):
-        self.sess.run(self.flat_params)
 
     def update(self, dct):
         """
@@ -165,7 +169,19 @@ class TRPO:
         """
             Train using TRPO algorithm
         """
-        paths = collect_samples()
+        for itr in range(self.maxiter):
+            trajectories = get_trajectories(self.env, agent=pi)
+
+            # Update V
+            # TODO: Complete section on Value
+
+            # Estimate advantage
+            # TODO: Complete section on Advantage Estimation
+
+            # Update policy
+            old_log_prob
+
+
         # TODO: Finish this section
 
 

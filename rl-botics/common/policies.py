@@ -3,9 +3,10 @@ import numpy as np
 import tensorflow_probability as tfp
 
 class SoftmaxPolicy:
-    def __init__(self, tf_graph, input):
-        self.sess = tf.Session(graph=tf_graph)
+    def __init__(self, sess, input):
+        self.sess = sess
         self.input = input
+
         # TODO: Complete the following
         self.act_logits
         self.act_dist = tfp.distributions.Categorical(logits=self.act_logits)
@@ -23,8 +24,8 @@ class SoftmaxPolicy:
     def get_entropy(self):
 
 class RandPolicy:
-    def __init__(self, tf_graph, act_dim, std=1.0, name='pi'):
-        self.sess = tf.Session(graph=tf_graph)
+    def __init__(self, sess, act_dim, std=1.0, name='pi'):
+        self.sess = sess
         self.act_dim = act_dim
         self.std = std
         self.name = name
