@@ -27,6 +27,7 @@ class TRPO:
         self.gamma = args.gamma
         self.num_ep = args.num_ep
         self.cg_damping = args.cg_damping
+        self.kl_bound = args.kl_bound
 
         # Initialize empty reward list
         self.rew_list = []
@@ -84,35 +85,89 @@ class TRPO:
         self.surrogate_loss = -tf.reduce_mean(prob_ratio*self.adv)
         self.pg = flatgrad(self.surrogate_loss, self.params)
 
-        self.shapes = [v.shape.as_list() for v in self.params]
-        size_params = np.sum([np.prod(shape) for shape in self.shapes])
-
+        # Compute Gradient Vector Product and Hessian Vector Product
+        self.shapes = [param.shape.as_list() for param in self.params]
+        self.size_params = np.sum([np.prod(shape) for shape in self.shapes])
         self.flat_tangents = tf.placeholder(tf.float32, (size_params,), name='flat_tangents')
+
+        # Compute gradients of KL wrt policy parameters
         grads = tf.gradients(pi.kl, self.params)
         tangents = []
         start = 0
         for shape in self.shapes:
             size = np.prod(shape)
-            tangents.append(tf.reshape(self.p[start:start + size], shape))
+            tangents.append(tf.reshape(self.flat_tangents[start:start + size], shape))
             start += size
+
+        # Gradient Vector Product
         gvp = tf.add_n([tf.reduce_sum(g * tangent) for (g, tangent) in zip(grads, tangents)])
+        # Fisher Vector Product (Hessian Vector Product)
         self.hvp = flatgrad(gvp, self.params)
-        # TODO: Finish this section
+
+        # Update operations - reshape flat parameters
+        # TODO: Make it into a function in util.py
+        self.flat_params = tf.concat([tf.reshape(param, [-1]) for param in self.params], axis=0)
+        self.flat_params_ph = tf.placeholder(dtype=tf.float32, (self.size_params,))
+        self.param_update = []
+        start = 0
+        assert len(self.params) == len(self.shapes), "Wrong shapes."
+        for i, shape in enumerate(self.shapes):
+            size = np.prod(shape)
+            param = tf.reshape(self.flat_params_ph[start:start + size], shape)
+            self.param_update.append(self.params[i].assign(param))
+            start += size
+
+        assert start == self.size_params, "Wrong shapes."
 
     def _init_session(self):
             """Launch TensorFlow session and initialize variables"""
             self.sess.run(self.init)
 
+    def update_param(self, params):
+        feed_dict = {self.flat_params_ph: params}
+        self.sess.run(self.param_update, feed_dict=feed_dict)
+
+    def get_flat_params(self):
+        self.sess.run(self.flat_params)
+
+    def update(self, dct):
+        """
+            Update policy parameters
+        """
+        prev_params = self.get_flat_params()
+
+        def get_pg():
+            return self.sess.run(self.pg, dct)
+
+        def get_hvp(p):
+            dct[self.flat_tangents] = p
+            return self.sess.run(self.hvp, dct) + self.cg_damping * p
+
+        def get_loss(params):
+            self.update_param(params)
+            return self.sess.run([self.loss, self.kl], dct)
+
+        pg = get_pg()  # vanilla gradient
+        if np.allclose(pg, 0):
+            print("Got zero gradient. Not updating.")
+            return
+        stepdir = cg(f_Ax=get_hvp, b=-pg)  # natural gradient direction
+        shs = 0.5 * stepdir.dot(get_hvp(stepdir))
+        lm = np.sqrt(shs / self.kl_bound)  # optimal stepsize (see Eq 3-5 in https://arxiv.org/pdf/1703.02660.pdf)
+        fullstep = stepdir / lm
+        expected_improve = -pg.dot(stepdir) / lm
+        success, new_params = linesearch(get_loss, prev_params, fullstep, expected_improve, self.kl_bound)
+
+        self.update_param(new_params)
+
+
     def train(self):
         """
             Train using TRPO algorithm
         """
+        paths = collect_samples()
         # TODO: Finish this section
 
-    def update(self):
-        """
-            Update policy parameters
-        """
 
     def print_results(self):
         """
