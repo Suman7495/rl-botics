@@ -87,7 +87,7 @@ class TRPO:
         # Compute Gradient Vector Product and Hessian Vector Product
         self.shapes = [param.shape.as_list() for param in self.params]
         self.size_params = np.sum([np.prod(shape) for shape in self.shapes])
-        self.flat_tangents = tf.placeholder(tf.float32, (size_params,), name='flat_tangents')
+        self.flat_tangents = tf.placeholder(tf.float32, (self.size_params,), name='flat_tangents')
 
         # Compute gradients of KL wrt policy parameters
         grads = tf.gradients(pi.kl, self.params)
