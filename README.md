@@ -3,11 +3,9 @@ RL-botics is a toolbox containing state-of-the-art implemntations of deep Reinfo
 
 Each folder corresponds to a particular algorithm which contains the required theoretical material to get started.
 
-## Getting Started
+## Prerequisites
 
-### Prerequisites
-
-### Installation
+## Installation
 
 ## Usage
 
