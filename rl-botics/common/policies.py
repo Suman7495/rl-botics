@@ -17,7 +17,8 @@ class SoftmaxPolicy:
         self.act
         self.log_prob
 
-    def pick_action(self):
+    def pick_action(self, obs):
+        return 0
 
     def get_log_prob(self):
 
@@ -30,5 +31,12 @@ class RandPolicy:
         self.std = std
         self.name = name
 
-    def pick_action(self):
+    def pick_action(self, obs):
         return np.squeeze(np.random.normal(loc=0.0, scale=self.std, size=self.act_dim))
+
+class MultivariateGaussianPolicy:
+    def __init__(self):
+        self.name = 'MultiGaussPolicy'
+
+    def pick_action(self, obs):
+        return 0

@@ -170,32 +170,22 @@ class TRPO:
         """
             Train using TRPO algorithm
         """
+        trajectories = get_trajectories(self.env, agent=pi)
+        self.update_policy(self.sess, trajectories)
+        prev_trajectories = trajectories
+
         for itr in range(self.maxiter):
             trajectories = get_trajectories(self.env, agent=pi)
 
-            # Update V
-            # TODO: Complete section on Value
+            # Update Policy
+            self.update_policy(self.sess, trajectories)
+            self.update_value(self.sess, prev_trajectories)
 
-            # Estimate advantage
-            # TODO: Complete section on Advantage Estimation
-
-            # Old policy
-            self.old_log_prob = pi.log_prob
-            self.old_mean =
-            self.old_std =
-
-            # Update policy
-            feed_dict = {}
-            loss_before = self.sess.run()
-            self.update(feed_dict)
-            loss_after = self.sess.run()
-
-            # Evaluate policy
-            avg_rew =
-            entropy =
-            kl =
+            # Update trajectories
+            prev_trajectories = trajectories
 
             # Log data
+
 
         self.sess.close()
 

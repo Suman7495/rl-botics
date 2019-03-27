@@ -7,9 +7,9 @@ class MLP:
     Multi-Layered Perceptron
     """
     # TODO: introduce Conv and LSTM
-    def __init__(self, sess, input_dim, sizes, activations, scope='MLP'):
+    def __init__(self, sess, input_dim, sizes, activations, layer_types, scope='MLP'):
         """
-        :param sess: Tensorflow sesssion
+        :param sess: Tensorflow session
         :param input_dim: Input dimension of the tensor
         :param sizes: List of hidden layer sizes. e.g. sizes = [32, 32, output_dim]
         :param activations: Activations of each layer nodes. e.g. activations = ['tanh', 'tanh', 'tanh']
@@ -17,10 +17,36 @@ class MLP:
         """
         self.sess = sess
         self.input_dim = input_dim
+        assert len(sizes) == len(activations)
         self.model = Sequential()
         self.model.add(Dense(sizes[0], activation=activations[0], input_dim=self.input_dim))
         for l, nh in enumerate(sizes):
-            output = self.model.add(Dense(nh, activation=activations[l], name=str(l))
+            if layer_types[l] == 'rnn':
+                ouput = self.model.add(LSTM(nh, return_sequence=True))
+            elif layer_types[l] == 'conv':
+                output = self.model.add(Conv(nh, activation=activations[l], name=str(l)))
+            else:
+                output = self.model.add(Dense(nh, activation=activations[l], name=str(l))
 
         self.output = output
         self.vars = tf.trainable_variables(scope=scope)
+
+
+        # Compile model
+        optimizer = 'categorical_crossentropy'
+        model.compile(optimizer=optimizer,
+                      loss = loss,
+                      metrics=['accuracy'])
+
+        # Initialize model
+        self.init = tf.initializers.global_variables()
+        self.sess.run(init)
+
+    def get_trainable_vars(self):
+        return self.sess.run(self.vars)
+
+    def set_model_weights(self, weights):
+        return 0
+
+    def print_model_summary(self):
+        print(self.model.summary())
