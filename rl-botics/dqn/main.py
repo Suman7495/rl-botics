@@ -19,6 +19,8 @@ def argparser():
     parser.add_argument('--min_epsilon', type=float, default=h.min_eps)
     parser.add_argument('--epsilon_decay', type=float, default=h.eps_decay)
     parser.add_argument('--batch_size', type=int, default=h.batch_size)
+    parser.add_argument('--render', type=bool, default=h.render)
+    parser.add_argument('--memory_max_len', type=int, default=h.memory_max_len)
     return parser.parse_args()
 
 

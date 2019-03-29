@@ -8,19 +8,18 @@ from keras.models import Sequential
 from keras.layers import Dense
 from keras.optimizers import Adam
 from collections import deque
-
+from approximators import *
 
 class DQN:
     def __init__(self, args, sess):
         """
             Initialize DQN agent class
         """
-        env = gym.make(args.env)
-        self.env = env
+        self.sess = sess
+        self.env = gym.make(args.env)
         self.obs_dim = self.env.observation_space.shape[0]
         self.act_dim = self.env.action_space.n
-        self.render = False
-        print(self.act_dim)
+        self.render = args.render
 
         # Hyperparameters
         self.lr = args.lr
@@ -32,7 +31,7 @@ class DQN:
         self.batch_size = args.batch_size
 
         # Replay Memory with capacity 2000
-        self.memory = deque(maxlen=2000)
+        self.memory = deque(maxlen=args.memory_max_len)
 
         # Initialize an empty reward list
         self.rew_list = []
@@ -44,12 +43,21 @@ class DQN:
         """
             Neural Network model of the DQN agent
         """
-        model = Sequential()
-        model.add(Dense(units=64, activation='relu', input_dim=self.obs_dim))
-        model.add(Dense(units=64, activation='relu'))
-        model.add(Dense(units=self.act_dim, activation='linear'))
-        model.compile(loss='mse', optimizer=Adam(lr=self.lr))
-        return model
+        sizes = [64, 64, self.act_dim]
+        activations = ['relu', 'relu', 'linear']
+        layer_types = ['dense', 'dense', 'dense']
+        loss = 'mse'
+        optimizer = Adam(self.lr)
+        policy = MLP(self.sess, self.obs_dim, sizes, activations, layer_types, loss, optimizer)
+        policy.print_model_summary()
+        return policy
+
+        # model = Sequential()
+        # model.add(Dense(units=64, activation='relu', input_dim=self.obs_dim))
+        # model.add(Dense(units=64, activation='relu'))
+        # model.add(Dense(units=self.act_dim, activation='linear'))
+        # model.compile(loss='mse', optimizer=Adam(lr=self.lr))
+        # return model
 
     def store_memory(self, transition):
         """
