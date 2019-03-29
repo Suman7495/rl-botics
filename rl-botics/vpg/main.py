@@ -1,6 +1,6 @@
 import argparse
 import gym
-from REINFORCE import *
+from reinforce import *
 import tensorflow as tf
 
 
