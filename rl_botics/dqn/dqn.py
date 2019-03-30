@@ -25,11 +25,12 @@ class DQN:
         # Hyperparameters
         self.lr = args.lr
         self.gamma = args.gamma
-        self.epsilon = args.epsilon
-        self.min_epsilon = args.min_epsilon
-        self.epsilon_decay = args.epsilon_decay
+        self.epsilon = args.eps
+        self.min_epsilon = args.min_eps
+        self.epsilon_decay = args.eps_decay
         self.num_ep = args.num_episodes
         self.batch_size = args.batch_size
+        self.buffer_size = args.buffer_size
 
         # Policy network hyperparameters
         self.net_sizes = h.hidden_sizes + [self.act_dim]
@@ -39,7 +40,7 @@ class DQN:
         self.net_optimizer = Adam(self.lr)
 
         # Replay Memory with capacity 2000
-        self.memory = deque(maxlen=args.memory_max_len)
+        self.memory = ReplayBuffer(self.buffer_size, self.batch_size)
 
         # Initialize an empty reward list
         self.rew_list = []
@@ -61,82 +62,37 @@ class DQN:
         policy.print_model_summary()
         return policy
 
-    def store_memory(self, transition):
-        """
-            Store transition in replay memory
-        """
-        self.memory.append(transition)
-
-    def replay(self):
+    def learn(self):
         """
             Experience Replay
         """
-        minibatch = random.sample(self.memory, self.batch_size)
+        minibatch = self.memory.sample
         for state, action, reward, next_state, done in minibatch:
+            state = np.atleast_2d(state)
+            next_state = np.atleast_2d(next_state)
             target = reward
             if not done:
                 target += self.gamma * np.amax(self.policy.predict(next_state))
             target_new = self.policy.predict(state)
             target_new[0][action] = target
             self.policy.fit(state, target_new, verbose=0)
+
         if self.epsilon > self.min_epsilon:
             self.epsilon *= self.epsilon_decay
 
-    def pick_action(self, state):
-        """
-            Choose epsilon-greedy action
-        """
-        if np.random.rand() < self.epsilon:
-            return random.randrange(self.act_dim)
-        action = self.policy.predict(state)
-        return np.argmax(action[0])
-
-    def train2(self):
-        """
-            Train agent
-            TODO: Complete
-        """
-        for ep in range(int(self.num_ep)):
-            paths = get_trajectories(self.env, agent=self.policy)
-            print("Completed episode number: ", ep)
-
-            # TODO: call replay
-
     def train(self):
         """
-            Train using DQN algorithm
+            Train agent
         """
         for ep in range(int(self.num_ep)):
-            state = self.env.reset()
-            state = np.reshape(state, [1, self.obs_dim])
-            tot_rew = 0
-            done = False
-            t = 0
-            # Iterate over timesteps
-            while t < 1000:
-                t += 1
-                if self.render:
-                    self.env.render()
-                act = self.pick_action(state)
+            paths = get_trajectories(self.env,
+                                     agent=self.policy,
+                                     max_transitions=self.batch_size,
+                                     render=self.render)
+            self.memory.add(paths)
+            self.learn()
+            print("Completed iteration: ", ep)
 
-                # Get next state and reward from environment
-                next_state, rew, done, info = self.env.step(act)
-                next_state = np.reshape(next_state, [1, self.obs_dim])
-
-                # Store transition in memory
-                transition = deque((state, act, rew, next_state, done))
-                self.store_memory(transition)
-
-                tot_rew += rew
-                state = next_state
-                if done:
-                    print("\nEpisode: {}/{}, score: {}"
-                          .format(ep, self.num_ep, t))
-                    break
-                if len(self.memory) > self.batch_size:
-                    self.replay()
-
-            self.rew_list.append(tot_rew)
 
     def print_results(self):
         """
@@ -146,3 +102,25 @@ class DQN:
         print ("Score over time: " + str(avg_rew))
         plt.plot(self.rew_list)
         plt.show()
+
+
+class ReplayBuffer:
+    def __init__(self, buffer_size, batch_size):
+        self.memory = deque(maxlen=buffer_size)
+        self.batch_size = batch_size
+
+    def add(self, paths):
+        if self.memory:
+            self.memory += paths
+        else:
+            self.memory = paths
+
+    def sample(self):
+        minibatch = random.sample(self.memory, self.batch_size)
+        return minibatch
+
+    def __len__(self):
+        """
+        :return: Current memory size
+        """
+        return len(self.memory)

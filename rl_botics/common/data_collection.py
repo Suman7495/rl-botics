@@ -2,7 +2,7 @@ from collections import deque
 import numpy as np
 
 
-def rollout(env, agent, render=True, timestep_limit=1000):
+def rollout(env, agent, render=False, timestep_limit=1000):
     """
         Execute one episode
     """
@@ -16,17 +16,16 @@ def rollout(env, agent, render=True, timestep_limit=1000):
 
         # Store transition
         transition = deque((obs, action, rew, new_obs, done))
-        data.append(transition)
+        yield transition
 
         if done:
             #print("Terminated after %s timesteps" % t)
             break
 
         obs = new_obs
-    return np.array(data)
 
 
-def get_trajectories(env, agent, num_path_limit = 256):
+def get_trajectories(env, agent, max_transitions = 256, render=False):
     """
     :param env: Environment
     :param agent: Policy pi
@@ -39,15 +38,13 @@ def get_trajectories(env, agent, num_path_limit = 256):
              [5] done: Boolean to determine if episode has completed
 
     """
-    keys = ["obs", "act", "rew", "new_obs", "done"]
-    paths = {keys[0]: [], keys[1]: [], keys[2]: [], keys[3]: [], keys[4]: []}
-    num_paths = 0
+    data = deque()
+    num_transitions = 0
     while True:
-        path = rollout(env, agent)
-        for c, v in enumerate(keys):
-            paths[v].append(path[:, c])
-        num_paths += path.shape[0]
-        if num_paths > num_path_limit:
+        for transition in rollout(env, agent, render):
+            data.append(transition)
+            num_transitions += 1
+        if num_transitions > max_transitions:
             break
 
-    return paths
+    return data

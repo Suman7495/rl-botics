@@ -54,7 +54,7 @@ class MLP:
         print(self.model.summary())
 
     def fit(self, x, y, verbose=0):
-        self.model.fit(x, y, verbose=0)
+        self.model.fit(x, y, verbose=verbose)
 
     def predict(self, x, batch_size=None):
         return self.model.predict(x, batch_size)

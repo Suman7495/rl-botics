@@ -10,7 +10,7 @@ eps             = 0.1
 min_eps         = 0.1
 eps_decay       = 0.995
 batch_size      = 32
-memory_max_len  = 2000
+buffer_size  = 2000
 
 # Policy Network
 hidden_sizes    = [64, 64] #Dimension has to be one less than activations and layertypes
