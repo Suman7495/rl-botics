@@ -8,7 +8,7 @@ from keras.models import Sequential
 from keras.layers import Dense
 from keras.optimizers import Adam
 from collections import deque
-from approximators import *
+from rl_botics.common.approximators import *
 
 class DQN:
     def __init__(self, args, sess):

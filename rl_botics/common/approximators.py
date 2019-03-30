@@ -42,7 +42,6 @@ class MLP:
         self.init = tf.initializers.global_variables()
         self.sess.run(self.init)
 
-
     def get_trainable_vars(self):
         return self.sess.run(self.vars)
 
