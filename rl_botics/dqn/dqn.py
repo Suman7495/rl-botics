@@ -94,6 +94,7 @@ class DQN:
     def train2(self):
         """
             Train agent
+            TODO: Complete
         """
         for ep in range(int(self.num_ep)):
             paths = get_trajectories(self.env, agent=self.policy)
