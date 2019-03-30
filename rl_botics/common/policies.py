@@ -1,6 +1,9 @@
 import tensorflow as tf
 import numpy as np
 import tensorflow_probability as tfp
+from rl_botics.common.approximators import *
+import random
+
 
 class SoftmaxPolicy:
     def __init__(self, sess, obs, input):
@@ -20,15 +23,15 @@ class SoftmaxPolicy:
 
     def pick_action(self, obs):
         feed_dict = {self.obs: obs}
-        action = self.sess.run(self.sampled_action, feed_dict=feed_dict)
+        action = np.squeeze(self.sess.run(self.sampled_action, feed_dict=feed_dict))
         print(action)
         return action
 
-    def get_log_prob(self):
-
-    def get_entropy(self):
-
-    def get_mean(self):
+    # def get_log_prob(self):
+    #
+    # def get_entropy(self):
+    #
+    # def get_mean(self):
 
 
 class RandPolicy:
@@ -48,3 +51,20 @@ class MultivariateGaussianPolicy:
 
     def pick_action(self, obs):
         return 0
+
+
+class MlpPolicy(MLP):
+    def __init__(self, sess, input_dim, sizes, activations, layer_types, loss=None, optimizer=None, scope='MLP_Policy'):
+        super().__init__(sess, input_dim, sizes, activations, layer_types, loss, optimizer)
+
+    def pick_action(self, obs):
+        # Reshape observation array to match input dimension
+        obs = np.atleast_2d(obs)
+
+        # Epsilon greedy exploration
+        eps = 0.1
+        if np.random.rand() < eps:
+            return random.randrange(self.sizes[-1])
+        act_probs = np.squeeze(self.predict(obs))
+        action = np.argmax(act_probs)
+        return action

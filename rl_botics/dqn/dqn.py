@@ -1,16 +1,15 @@
-import gym
-import gym.spaces
+import gym, gym.spaces
 import numpy as np
 import random
 import matplotlib.pyplot as plt
 import tensorflow as tf
-from keras.models import Sequential
-from keras.layers import Dense
 from keras.optimizers import Adam
 from collections import deque
 from rl_botics.common.approximators import *
 from rl_botics.common.data_collection import *
+from rl_botics.common.policies import *
 import hyperparameters as h
+
 
 class DQN:
     def __init__(self, args, sess):
@@ -52,7 +51,7 @@ class DQN:
         """
             Neural Network model of the DQN agent
         """
-        policy = MLP(self.sess,
+        policy = MlpPolicy(self.sess,
                      self.obs_dim,
                      self.net_sizes,
                      self.net_activations,
@@ -91,6 +90,16 @@ class DQN:
             return random.randrange(self.act_dim)
         action = self.policy.predict(state)
         return np.argmax(action[0])
+
+    def train2(self):
+        """
+            Train agent
+        """
+        for ep in range(int(self.num_ep)):
+            paths = get_trajectories(self.env, agent=self.policy)
+            print("Completed episode number: ", ep)
+
+            # TODO: call replay
 
     def train(self):
         """

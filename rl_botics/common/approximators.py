@@ -2,7 +2,7 @@ from keras.models import Sequential
 from keras.layers import Dense
 from keras.optimizers import Adam
 import tensorflow as tf
-
+import numpy as np
 
 class MLP:
     """
@@ -19,6 +19,7 @@ class MLP:
         self.sess = sess
         self.input_dim = input_dim
         assert len(sizes) == len(activations)
+        self.sizes = sizes
         self.model = Sequential()
         self.model.add(Dense(sizes[0], activation=activations[0], input_dim=self.input_dim))
         sizes = sizes[1:]
@@ -55,5 +56,5 @@ class MLP:
     def fit(self, x, y, verbose=0):
         self.model.fit(x, y, verbose=0)
 
-    def predict(self, input, batch_size=None):
-        return self.model.predict(input, batch_size)
+    def predict(self, x, batch_size=None):
+        return self.model.predict(x, batch_size)

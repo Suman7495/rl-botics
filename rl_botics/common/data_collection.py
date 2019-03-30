@@ -2,14 +2,14 @@ from collections import deque
 import numpy as np
 
 
-def rollout(env, agent, render=False, timestep_limit=1000):
+def rollout(env, agent, render=True, timestep_limit=1000):
     """
         Execute one episode
     """
     data = deque(maxlen=timestep_limit)
     obs = env.reset()
     for t in range(timestep_limit):
-        if render and t % 50 == 0:
+        if render:
             env.render()
         action = agent.pick_action(obs)
         new_obs, rew, done, info = env.step(action)
@@ -19,7 +19,7 @@ def rollout(env, agent, render=False, timestep_limit=1000):
         data.append(transition)
 
         if done:
-            print("Terminated after %s timesteps" % t)
+            #print("Terminated after %s timesteps" % t)
             break
 
         obs = new_obs
