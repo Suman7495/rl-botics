@@ -11,10 +11,13 @@ def argparser():
     :return: Parsed arguments
     """
     parser = argparse.ArgumentParser()
+    # General Parameters
     parser.add_argument('--env', type=str, default=h.env_name)
     parser.add_argument('--gamma', type=float, default=h.gamma)
     parser.add_argument('--lr', type=float, default=h.lr)
     parser.add_argument('--num_episodes', type=int, default=h.num_ep)
+
+    # DQN Specific Parameters
     parser.add_argument('--epsilon', type=float, default=h.eps)
     parser.add_argument('--min_epsilon', type=float, default=h.min_eps)
     parser.add_argument('--epsilon_decay', type=float, default=h.eps_decay)

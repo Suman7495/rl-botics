@@ -9,6 +9,8 @@ from keras.layers import Dense
 from keras.optimizers import Adam
 from collections import deque
 from rl_botics.common.approximators import *
+from rl_botics.common.data_collection import *
+import hyperparameters as h
 
 class DQN:
     def __init__(self, args, sess):
@@ -30,6 +32,13 @@ class DQN:
         self.num_ep = args.num_episodes
         self.batch_size = args.batch_size
 
+        # Policy network hyperparameters
+        self.net_sizes = h.hidden_sizes + [self.act_dim]
+        self.net_activations = h.activations
+        self.net_layer_types = h.layer_types
+        self.net_loss = h.loss
+        self.net_optimizer = Adam(self.lr)
+
         # Replay Memory with capacity 2000
         self.memory = deque(maxlen=args.memory_max_len)
 
@@ -43,21 +52,15 @@ class DQN:
         """
             Neural Network model of the DQN agent
         """
-        sizes = [64, 64, self.act_dim]
-        activations = ['relu', 'relu', 'linear']
-        layer_types = ['dense', 'dense', 'dense']
-        loss = 'mse'
-        optimizer = Adam(self.lr)
-        policy = MLP(self.sess, self.obs_dim, sizes, activations, layer_types, loss, optimizer)
+        policy = MLP(self.sess,
+                     self.obs_dim,
+                     self.net_sizes,
+                     self.net_activations,
+                     self.net_layer_types,
+                     self.net_loss,
+                     self.net_optimizer)
         policy.print_model_summary()
         return policy
-
-        # model = Sequential()
-        # model.add(Dense(units=64, activation='relu', input_dim=self.obs_dim))
-        # model.add(Dense(units=64, activation='relu'))
-        # model.add(Dense(units=self.act_dim, activation='linear'))
-        # model.compile(loss='mse', optimizer=Adam(lr=self.lr))
-        # return model
 
     def store_memory(self, transition):
         """
@@ -109,10 +112,11 @@ class DQN:
                 # Get next state and reward from environment
                 next_state, rew, done, info = self.env.step(act)
                 next_state = np.reshape(next_state, [1, self.obs_dim])
+
                 # Store transition in memory
                 transition = deque((state, act, rew, next_state, done))
                 self.store_memory(transition)
-  
+
                 tot_rew += rew
                 state = next_state
                 if done:
@@ -130,5 +134,5 @@ class DQN:
         """
         avg_rew = sum(self.rew_list)/self.num_ep
         print ("Score over time: " + str(avg_rew))
-        plt.plot(rew_list)
+        plt.plot(self.rew_list)
         plt.show()

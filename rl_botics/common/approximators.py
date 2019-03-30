@@ -21,6 +21,7 @@ class MLP:
         assert len(sizes) == len(activations)
         self.model = Sequential()
         self.model.add(Dense(sizes[0], activation=activations[0], input_dim=self.input_dim))
+        sizes = sizes[1:]
         for l, nh in enumerate(sizes):
             if layer_types[l] == 'rnn':
                 ouput = self.model.add(LSTM(nh, return_sequence=True))
@@ -54,5 +55,5 @@ class MLP:
     def fit(self, x, y, verbose=0):
         self.model.fit(x, y, verbose=0)
 
-    def predict(self, x, batch_size=None):
-        return self.model.predict(x, batch_size)
+    def predict(self, input, batch_size=None):
+        return self.model.predict(input, batch_size)
