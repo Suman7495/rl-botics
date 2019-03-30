@@ -37,7 +37,7 @@ class DQN:
         self.rew_list = []
 
         # Initialize graph
-        self.model = self.build_model()
+        self.policy = self.build_model()
 
     def build_model(self):
         """
@@ -73,10 +73,10 @@ class DQN:
         for state, action, reward, next_state, done in minibatch:
             target = reward
             if not done:
-                target += self.gamma * np.amax(self.model.predict(next_state))
-            target_new = self.model.predict(state)
+                target += self.gamma * np.amax(self.policy.predict(next_state))
+            target_new = self.policy.predict(state)
             target_new[0][action] = target
-            self.model.fit(state, target_new, verbose=0)
+            self.policy.fit(state, target_new, verbose=0)
         if self.epsilon > self.min_epsilon:
             self.epsilon *= self.epsilon_decay
 
@@ -86,7 +86,7 @@ class DQN:
         """
         if np.random.rand() < self.epsilon:
             return random.randrange(self.act_dim)
-        action = self.model.predict(state)
+        action = self.policy.predict(state)
         return np.argmax(action[0])
 
     def train(self):
