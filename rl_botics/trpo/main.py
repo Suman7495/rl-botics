@@ -1,21 +1,27 @@
 import argparse
 from trpo import *
 import tensorflow as tf
-from .hyperparameters as tf
+import hyperparameters as h
 
+
+def argparser():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--env', type=str, default=h.env_name)
+    parser.add_argument('--gamma', type=float, default=h.gamma)
+    parser.add_argument('--lr', type=float, default=h.lr)
+    parser.add_argument('--maxiter', type=int, default=h.maxiter)
+    parser.add_argument('--render', type=bool, default=h.render)
+    parser.add_argument('--batch_size', type=int, default=h.batch_size)
+    parser.add_argument('--cg_damping', type=float, default=h.cg_damping)
+    parser.add_argument('--kl_bound', type=float, default=h.kl_bound)
+    return parser.parse_args()
 
 def main():
     """
         Main script
         Default environment: CartPole-v0
     """
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--env', type=str, default='CartPole-v0')
-    parser.add_argument('--gamma', type=float, default=gamma)
-    parser.add_argument('--lr', type=float, default=lr)
-    parser.add_argument('--num_ep', type=int, default=num_ep)
-    parser.add_argument('--cg_damping', type=float, default=cg_damping)
-    args = parser.parse_args()
+    args = argparser()
 
     with tf.Session() as sess:
         agent = TRPO(args, sess)

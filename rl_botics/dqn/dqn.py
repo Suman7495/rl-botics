@@ -66,7 +66,7 @@ class DQN:
         """
             Experience Replay
         """
-        minibatch = self.memory.sample
+        minibatch = self.memory.sample()
         for state, action, reward, next_state, done in minibatch:
             state = np.atleast_2d(state)
             next_state = np.atleast_2d(next_state)
@@ -92,7 +92,6 @@ class DQN:
             self.memory.add(paths)
             self.learn()
             print("Completed iteration: ", ep)
-
 
     def print_results(self):
         """

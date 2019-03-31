@@ -5,33 +5,42 @@ from rl_botics.common.approximators import *
 import random
 
 
-class SoftmaxPolicy:
-    def __init__(self, sess, obs, input):
+class MlpSoftmaxPolicy(MLP):
+    def __init__(self, sess, obs, batch_size, input_dim, sizes, activations, layer_types, loss=None, optimizer=None, scope='Softmax'):
+        super().__init__(sess, input_dim, sizes, activations, layer_types, loss, optimizer)
         self.sess = sess
         self.obs = obs
-        self.input = input
+        self.batch_size = batch_size
+        self.act = tf.placeholder(dtype=obs.dtype, shape=[None, 1])
+        self.scope = scope
 
-        # TODO: Complete the following
-        self.act_logits = input
+        # Get output from Neural Network and create Softmax Distribution
+        if self.output is None:
+            self.act_logits = np.zeros(sizes[-1])
+        else:
+            self.act_logits = self.output
         self.act_dist = tfp.distributions.Categorical(logits=self.act_logits)
         self.sampled_action = self.act_dist.sample()
 
         # Utilities
-        self.log_prob = self.act_dist.log_prob()
-        self.mean = self.act_dist.mean()
+        # TODO: Add kl divergence
+        self.log_prob = self.act_dist.log_prob(self.act)
         self.entropy = tf.reduce_mean(self.act_dist.entropy())
 
     def pick_action(self, obs):
-        feed_dict = {self.obs: obs}
+        feed_dict = {self.obs: np.atleast_2d(obs)}
         action = np.squeeze(self.sess.run(self.sampled_action, feed_dict=feed_dict))
-        print(action)
         return action
 
-    # def get_log_prob(self):
-    #
-    # def get_entropy(self):
-    #
-    # def get_mean(self):
+    def get_log_prob(self, act):
+        feed_dict = {self.act: np.atleast_2d(act)}
+        log_prob = self.sess.run(self.log_prob, feed_dict=feed_dict)
+        return log_prob
+
+    def get_entropy(self, obs):
+        feed_dict = {self.obs: np.atleast_2d(obs)}
+        entropy = self.sess.run(self.entropy, feed_dict=feed_dict)
+        return entropy
 
 
 class RandPolicy:
@@ -58,7 +67,6 @@ class MlpPolicy(MLP):
         super().__init__(sess, input_dim, sizes, activations, layer_types, loss, optimizer)
 
     def pick_action(self, obs):
-        # Reshape observation array to match input dimension
         obs = np.atleast_2d(obs)
 
         # Epsilon greedy exploration

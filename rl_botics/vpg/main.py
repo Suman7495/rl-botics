@@ -1,8 +1,17 @@
 import argparse
-import gym
 from reinforce import *
 import tensorflow as tf
 
+
+def argparser():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--env', type=str, default='CartPole-v0')
+    parser.add_argument('--gamma', type=float, default=0.99)
+    parser.add_argument('--lr', type=float, default=0.01)
+    parser.add_argument('--num_episodes', type=int, default=1e3)
+    parser.add_argument('--render', type=bool, default=True)
+    parser.add_argument('--batch_size', type=int, default=32)
+    return parser.parse_args()
 
 def main():
     """
@@ -10,13 +19,8 @@ def main():
         Default environment: CartPole-v0
         Import default from hyperparameters.py
     """
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--env', type=str, default='CartPole-v0')
-    parser.add_argument('--gamma', type=float, default=0.99)
-    parser.add_argument('--lr', type=float, default=0.01)
-    parser.add_argument('--num_episodes', type=int, default=1e3)
-    parser.add_argument('--render', type=bool, default=True)
-    args = parser.parse_args()
+
+    args = argparser()
 
     with tf.Session() as sess:
         agent = REINFORCE(args, sess)

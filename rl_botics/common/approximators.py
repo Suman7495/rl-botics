@@ -31,13 +31,18 @@ class MLP:
             else:
                 output = self.model.add(Dense(nh, activation=activations[l], name=str(l)))
         self.output = output
+        print("In approx", self.output)
         self.vars = tf.trainable_variables(scope=scope)
 
         # Compile model
-        if optimizer: self.optimizer = optimizer
-        else: self.optimizer = Adam
-        if loss: self.loss = loss
-        else: self.loss = 'mse'
+        if optimizer:
+            self.optimizer = optimizer
+        else:
+            self.optimizer = Adam
+        if loss:
+            self.loss = loss
+        else:
+            self.loss = 'mse'
         self.model.compile(optimizer=self.optimizer, loss=self.loss)
 
         # Initialize model

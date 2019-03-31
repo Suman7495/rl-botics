@@ -5,9 +5,11 @@ import numpy as np
 import random
 import matplotlib.pyplot as plt
 
-from common import *
-from .hyperparameters import *
-from .utils import *
+from rl_botics.common.approximators import *
+from rl_botics.common.data_collection import *
+from rl_botics.common.policies import *
+import hyperparameters as h
+from utils import *
 
 class TRPO:
     def __init__(self, args, sess):
@@ -17,16 +19,24 @@ class TRPO:
         self.sess = sess
         self.env = gym.make(args.env)
         self.obs_dim = self.env.observation_space.shape[0]
-        self.act_dim = self.env.action_space.shape[0]
+        self.act_dim = self.env.action_space.n
         self.render = True
         self.env_continuous = False
 
         # Hyperparameters
         self.lr = args.lr
         self.gamma = args.gamma
-        self.num_ep = args.num_ep
+        self.maxiter = args.maxiter
         self.cg_damping = args.cg_damping
+        self.batch_size = args.batch_size
         self.kl_bound = args.kl_bound
+
+        # Parameters for the policy network
+        self.pi_sizes = h.pi_sizes + [self.act_dim]
+        self.pi_activations = h.pi_activations + ['relu']
+        self.pi_layer_types = h.pi_layer_types + ['dense']
+        self.pi_optimizer = Adam(self.lr)
+        self.loss = None
 
         # Initialize empty reward list
         self.rew_list = []
@@ -58,12 +68,18 @@ class TRPO:
 
     def _build_policy(self):
         """
-            Build the policy
+            Build Policy
         """
-        # Create the neural network with the Softmax function as output layer
-        # TODO: Figure out how to introduce the session
-        self.pi_net = MLP(self.obs_dim, pi_sizes, pi_activations, scope='policy')
-        self.pi = SoftmaxPolicy(self.sess, self.pi_net)
+        self.policy = MlpSoftmaxPolicy(self.sess,
+                                       self.obs,
+                                       self.batch_size,
+                                       self.obs_dim,
+                                       self.pi_sizes,
+                                       self.pi_activations,
+                                       self.pi_layer_types,
+                                       self.loss,
+                                       self.pi_optimizer)
+        print(self.policy.print_model_summary())
 
     def _build_value_function(self):
         """
@@ -76,13 +92,13 @@ class TRPO:
             Compute loss
         """
         # Log probabilities of new and old actions
-        prob_ratio = tf.exp(self.pi.log_prob - self.old_log_probs)
+        prob_ratio = tf.exp(self.policy.log_prob - self.old_log_probs)
 
         # Surrogate Loss
         if self.env_continuous:
-            self.params = self.pi_net.vars
+            self.params = self.policy.vars
         else:
-            self.params = [self.pi_net.vars, self.pi.vars]
+            self.params = [self.policy.vars, self.policy.vars]
         self.surrogate_loss = -tf.reduce_mean(prob_ratio*self.adv)
         self.pg = flatgrad(self.surrogate_loss, self.params)
 
@@ -108,7 +124,7 @@ class TRPO:
         # Update operations - reshape flat parameters
         # TODO: Make it into a function in util.py
         self.flat_params = tf.concat([tf.reshape(param, [-1]) for param in self.params], axis=0)
-        self.flat_params_ph = tf.placeholder(dtype=tf.float32, (self.size_params,))
+        self.flat_params_ph = tf.placeholder(tf.float32, (self.size_params,))
         self.param_update = []
         start = 0
         assert len(self.params) == len(self.shapes), "Wrong shapes."
@@ -121,8 +137,8 @@ class TRPO:
         assert start == self.size_params, "Wrong shapes."
 
         # TODO: Finish this section
-        self.kl = kl(self.pi, self.old_pi)
-        self.entropy =
+        self.kl = kl(self.policy, self.old_pi)
+        self.entropy = self.policy.get_entropy()
         self.loss = self.surrogate_loss
 
     def _init_session(self):
@@ -136,7 +152,7 @@ class TRPO:
         feed_dict = {self.flat_params_ph: params}
         self.sess.run(self.param_update, feed_dict=feed_dict)
 
-    def update(self, dct):
+    def update_policy(self, dct):
         """
             Update policy parameters
         """
@@ -165,27 +181,32 @@ class TRPO:
         success, new_params = linesearch(get_loss, prev_params, fullstep, expected_improve, self.kl_bound)
         self.set_flat_params(new_params)
 
+    def update_value(self, prev_paths):
+        """
+            Update paths
+        """
 
     def train(self):
         """
             Train using TRPO algorithm
         """
-        trajectories = get_trajectories(self.env, agent=pi)
-        self.update_policy(self.sess, trajectories)
-        prev_trajectories = trajectories
+        paths = get_trajectories(self.env, self.policy)
+        self.update_policy(paths)
+        prev_paths = paths
 
         for itr in range(self.maxiter):
-            trajectories = get_trajectories(self.env, agent=pi)
+            paths = get_trajectories(self.env, self.policy)
 
             # Update Policy
-            self.update_policy(self.sess, trajectories)
-            self.update_value(self.sess, prev_trajectories)
+            self.update_policy(paths)
+
+            # Update value function
+            self.update_value(prev_paths)
 
             # Update trajectories
-            prev_trajectories = trajectories
+            prev_paths = paths
 
-            # Log data
-
+            # TODO: Log data
 
         self.sess.close()
 

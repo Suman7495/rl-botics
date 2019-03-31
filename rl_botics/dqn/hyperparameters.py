@@ -1,7 +1,7 @@
 # General parameters
 env_name        = 'CartPole-v0'
 gamma           = 0.99
-lr              = 0.001
+lr              = 0.01
 num_ep          = 1e2
 render          = False
 
@@ -9,11 +9,11 @@ render          = False
 eps             = 0.1
 min_eps         = 0.1
 eps_decay       = 0.995
-batch_size      = 32
-buffer_size  = 2000
+batch_size      = 64
+buffer_size     = 2000
 
 # Policy Network
 hidden_sizes    = [64, 64] #Dimension has to be one less than activations and layertypes
-activations     = ['relu', 'relu', 'linear']
+activations     = ['relu', 'relu', 'softmax']
 layer_types     = ['dense', 'dense', 'dense']
 loss            = 'mse'
