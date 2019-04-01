@@ -99,7 +99,6 @@ class TRPO:
         self.kl = self.policy.act_dist.kl_divergence(self.old_policy)
         self.entropy = self.policy.entropy
         self.loss = self.surrogate_loss
-        self.policy.train_op(loss=self.loss, optimizer=self.pi_optimizer)
 
         # Compute Gradient Vector Product and Hessian Vector Product
         self.shapes = [list(param.shape) for param in self.params]
@@ -121,7 +120,6 @@ class TRPO:
         self.hvp = flatgrad(gvp, self.params)
 
         # Update operations - reshape flat parameters
-        # TODO: Make it into a function in util.py
         self.flat_params = tf.concat([tf.reshape(param, [-1]) for param in self.params], axis=0)
         self.flat_params_ph = tf.placeholder(tf.float32, (self.size_params,))
         self.param_update = []
