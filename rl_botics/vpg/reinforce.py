@@ -57,7 +57,7 @@ class REINFORCE:
         """
         self.obs = tf.placeholder(dtype=tf.float32, shape=[None, self.obs_dim], name='obs')
         self.act = tf.placeholder(dtype=tf.float32, shape=[None, self.act_dim], name='act')
-        self.adv = tf.placeholder(dtype=tf.float32, shape=[None, 1], name='adv')
+        self.adv = tf.placeholder(dtype=tf.float64, shape=[None, 1], name='adv')
 
     def _build_graph_original(self):
         """
@@ -108,10 +108,9 @@ class REINFORCE:
 
     def _loss(self):
         """
-        :return: Loss graph
+         Loss graph
         """
-        # TODO: Correct error
-        self.loss = -tf.log(self.policy.get_log_prob(self.act)) * self.adv
+        self.loss = -self.policy.log_prob * self.adv
 
     def _init_sess(self):
         """
@@ -144,7 +143,14 @@ class REINFORCE:
                                      agent=self.policy,
                                      max_transitions=self.batch_size,
                                      render=self.render)
-            self.policy.fit(self.obs)
+
+            self.update_policy(paths)
+            self.update_value(paths)
+
+    def update_policy(self, paths):
+
+    def update_value(self, paths):
+
 
     # def pick_action(self, state):
     #     """

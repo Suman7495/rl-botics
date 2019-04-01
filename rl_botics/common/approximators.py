@@ -1,5 +1,6 @@
-from keras.models import Sequential
-from keras.layers import Dense
+from keras.models import Model
+from keras.layers import Input, Dense, LSTM, Conv2D
+from keras import backend as K
 from keras.optimizers import Adam
 import tensorflow as tf
 import numpy as np
@@ -8,46 +9,34 @@ class MLP:
     """
     Multi-Layered Perceptron
     """
-    def __init__(self, sess, input_dim, sizes, activations, layer_types, loss=None, optimizer=None, scope='MLP'):
+    def __init__(self, sess, input_ph, sizes, activations, layer_types, scope='MLP'):
         """
         :param sess: Tensorflow session
-        :param input_dim: Input dimension of the tensor
+        :param input_ph: Input tensor
         :param sizes: List of hidden layer sizes. e.g. sizes = [32, 32, output_dim]
         :param activations: Activations of each layer nodes. e.g. activations = ['tanh', 'tanh', 'tanh']
         :param scope: Name of the scope. e.g. 'Q'
         """
         self.sess = sess
-        self.input_dim = input_dim
-        assert len(sizes) == len(activations)
-        self.sizes = sizes
-        self.model = Sequential()
-        self.model.add(Dense(sizes[0], activation=activations[0], input_dim=self.input_dim))
-        sizes = sizes[1:]
-        for l, nh in enumerate(sizes):
-            if layer_types[l] == 'rnn':
-                ouput = self.model.add(LSTM(nh, return_sequence=True))
-            elif layer_types[l] == 'conv':
-                output = self.model.add(Conv(nh, activation=activations[l], name=str(l)))
-            else:
-                output = self.model.add(Dense(nh, activation=activations[l], name=str(l)))
-        self.output = output
-        print("In approx", self.output)
+        assert len(sizes) == len(activations), "Layer sizes and activations mismatch"
+        self.input = input_ph
+        with tf.variable_scope(scope):
+            output = Input(tensor=self.input)
+            for l, nh in enumerate(sizes):
+                if layer_types[l] == 'rnn':
+                    ouput = LSTM(nh, return_sequence=True)(output)
+                elif layer_types[l] == 'conv':
+                    output =Conv2D(nh, activation=activations[l], name=str(l))(output)
+                else:
+                    output = Dense(nh, activation=activations[l], name=str(l))(output)
+            self.output = output
+            self.model = Model(inputs=[input_ph], outputs=self.output)
         self.vars = tf.trainable_variables(scope=scope)
 
-        # Compile model
-        if optimizer:
-            self.optimizer = optimizer
-        else:
-            self.optimizer = Adam
-        if loss:
-            self.loss = loss
-        else:
-            self.loss = 'mse'
-        self.model.compile(optimizer=self.optimizer, loss=self.loss)
-
-        # Initialize model
-        self.init = tf.initializers.global_variables()
-        self.sess.run(self.init)
+    def train_op(self, loss, optimizer):
+        self.loss = loss
+        self.optimizer = optimizer
+        self.train_op = self.optimizer.minimize(self.loss, var_list=self.vars)
 
     def get_trainable_vars(self):
         return self.sess.run(self.vars)

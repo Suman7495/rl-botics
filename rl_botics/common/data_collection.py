@@ -19,7 +19,7 @@ def rollout(env, agent, render=False, timestep_limit=1000):
         yield transition
 
         if done:
-            #print("Terminated after %s timesteps" % t)
+            print("Terminated after %s timesteps" % t)
             break
 
         obs = new_obs
@@ -31,11 +31,11 @@ def get_trajectories(env, agent, max_transitions = 256, render=False):
     :param agent: Policy pi
     :return: Trajectories
              Each trajectory contains:
-             [1] obs: Observation of the current state
-             [2] action: Action taken at the current state
-             [3] rew: Reward collected
-             [4] new_obs: New observation of the next state
-             [5] done: Boolean to determine if episode has completed
+             [0] obs: Observation of the current state
+             [1] action: Action taken at the current state
+             [2] rew: Reward collected
+             [3] new_obs: New observation of the next state
+             [4] done: Boolean to determine if episode has completed
 
     """
     data = deque()
