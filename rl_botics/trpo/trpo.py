@@ -43,7 +43,7 @@ class TRPO:
         self.v_activations = h.v_activations
         self.v_layer_types = h.v_layer_types
         self.v_batch_sizes = h.v_batch_sizes
-        self.v_optimizer = Adam(lr=h.v_lr)
+        self.v_optimizer = tf.train.AdamOptimizer(learning_rate=h.v_lr)
 
         # Build Tensorflow graph
         self._build_graph()
@@ -61,12 +61,17 @@ class TRPO:
         """
             Define Tensorflow placeholders
         """
+        # Observations, actions, advantages
         self.obs = tf.placeholder(dtype=tf.float32, shape=[None, self.obs_dim], name='obs')
         self.act = tf.placeholder(dtype=tf.float32, shape=[None, 1], name='act')
         self.adv = tf.placeholder(dtype=tf.float32, shape=[None, 1], name='adv')
 
+        # Policy old log prob and action logits (ouput of neural net)
         self.old_log_probs = tf.placeholder(dtype=tf.float32, shape=[None, 1], name='old_log_probs')
         self.old_act_logits = tf.placeholder(dtype=tf.float32, shape=[None, self.act_dim], name='old_act_logits')
+
+        # Target for value function
+        self.v_targ = tf.placeholder(dtype=tf.float32, shape=[None, 1], name='target_values')
 
     def _build_policy(self):
         """
@@ -94,7 +99,8 @@ class TRPO:
                          self.v_batch_sizes,
                          'value'
                          )
-        self.value.model.compile(loss='mse', optimizer=self.v_optimizer)
+        self.v_loss = tf.losses.mean_squared_error(self.value.output, self.v_targ)
+        self.v_train_step = self.v_optimizer.minimize(self.v_loss)
 
         print("\nValue model: ")
         print(self.value.print_model_summary())
@@ -203,12 +209,17 @@ class TRPO:
         success, new_params = linesearch(get_loss, prev_params, fullstep, expected_improve, self.kl_bound)
         self.set_flat_params(new_params)
 
-    def update_value(self, prev_paths):
+    def update_value(self, prev_feed_dict):
         """
             Update value function
 
-            :param prev_paths: Processed data from previous iteration (to avoid overfitting)
+            :param prev_feed_dict: Processed data from previous iteration (to avoid overfitting)
         """
+        # TODO: train in epochs and batches
+        feed_dict = {self.obs: prev_feed_dict[self.obs],
+                     self.v_targ: prev_feed_dict[self.adv]
+                    }
+        self.v_train_step.run(feed_dict)
 
     def process_paths(self, paths):
         """
@@ -225,7 +236,8 @@ class TRPO:
         act = paths[:, 1].reshape(-1,1)
         rew = paths[:, 2].reshape(-1,1)
 
-        # TODO: Compute advantages
+        # TODO: Compute advantages and GAE
+        values = self.sess.run(self.value.output, feed_dict={self.obs: obs})
 
         # Generate feed_dict with data
         feed_dict = {self.obs: obs,
@@ -241,22 +253,22 @@ class TRPO:
             Train using TRPO algorithm
         """
         paths = get_trajectories(self.env, self.policy)
-        paths = self.process_paths(paths)
-        self.update_policy(paths)
-        prev_paths = paths
+        dct = self.process_paths(paths)
+        self.update_policy(dct)
+        prev_dct = dct
 
         for itr in range(self.maxiter):
             paths = get_trajectories(self.env, self.policy)
-            paths = self.process_paths(paths)
+            dct = self.process_paths(paths)
 
             # Update Policy
-            self.update_policy(paths)
+            self.update_policy(dct)
 
             # Update value function
-            self.update_value(prev_paths)
+            self.update_value(prev_dct)
 
             # Update trajectories
-            prev_paths = paths
+            prev_dct = dct
 
             # TODO: Log data
 

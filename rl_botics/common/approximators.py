@@ -30,7 +30,7 @@ class MLP:
                 else:
                     output = Dense(nh, activation=activations[l], name=str(l))(output)
             self.output = output
-            self.model = Model(inputs=[input_ph], outputs=self.output)
+            self.model = Model(inputs=[input_ph], outputs=[self.output])
         self.vars = tf.trainable_variables(scope=scope)
 
     def train_op(self, loss, optimizer):
@@ -46,9 +46,6 @@ class MLP:
 
     def print_model_summary(self):
         print(self.model.summary())
-
-    def fit(self, x, y, verbose=0):
-        self.model.fit(x, y, verbose=verbose)
 
     def predict(self, x, batch_size=None):
         return self.model.predict(x, batch_size)
