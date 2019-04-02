@@ -7,7 +7,12 @@ import random
 
 class MlpSoftmaxPolicy(MLP):
     def __init__(self, sess, obs, sizes, activations, layer_types, batch_size=None, scope='Softmax'):
-        super().__init__(sess=sess, input_ph=obs, sizes=sizes, activations=activations, layer_types=layer_types)
+        super().__init__(sess=sess,
+                         input_ph=obs,
+                         sizes=sizes,
+                         activations=activations,
+                         layer_types=layer_types,
+                         batch_size=batch_size)
         self.sess = sess
         self.obs = obs
         self.input_ph = self.obs

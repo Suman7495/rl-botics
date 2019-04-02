@@ -4,17 +4,18 @@ import tensorflow_probability as tfp
 import numpy as np
 import random
 import matplotlib.pyplot as plt
-
+from keras.optimizers import Adam
 from rl_botics.common.approximators import *
 from rl_botics.common.data_collection import *
 from rl_botics.common.policies import *
 import hyperparameters as h
 from utils import *
 
+
 class TRPO:
     def __init__(self, args, sess):
         """
-        Initialize COPOS agent class
+        Initialize TRPO class
         """
         self.sess = sess
         self.env = gym.make(args.env)
@@ -24,7 +25,6 @@ class TRPO:
         self.env_continuous = False
 
         # Hyperparameters
-        self.lr = args.lr
         self.gamma = args.gamma
         self.maxiter = args.maxiter
         self.cg_damping = args.cg_damping
@@ -35,10 +35,15 @@ class TRPO:
         self.pi_sizes = h.pi_sizes + [self.act_dim]
         self.pi_activations = h.pi_activations + ['relu']
         self.pi_layer_types = h.pi_layer_types + ['dense']
-        self.pi_optimizer = tf.train.AdamOptimizer(learning_rate=self.lr)
+        self.pi_batch_size = h.pi_batch_size
+        self.pi_optimizer = tf.train.AdamOptimizer(learning_rate=h.pi_lr)
 
-        # Initialize empty reward list
-        self.rew_list = []
+        # Parameters for the value network
+        self.v_sizes = h.v_sizes
+        self.v_activations = h.v_activations
+        self.v_layer_types = h.v_layer_types
+        self.v_batch_sizes = h.v_batch_sizes
+        self.v_optimizer = Adam(lr=h.v_lr)
 
         # Build Tensorflow graph
         self._build_graph()
@@ -72,19 +77,31 @@ class TRPO:
                                        self.pi_sizes,
                                        self.pi_activations,
                                        self.pi_layer_types,
-                                       self.batch_size,
-                                    )
+                                       self.pi_batch_size,
+                                       )
+        print("\nPolicy model: ")
         print(self.policy.print_model_summary())
 
     def _build_value_function(self):
         """
-            Value function
+            Value function graph
         """
-        return
+        self.value = MLP(self.sess,
+                         self.obs,
+                         self.v_sizes,
+                         self.v_activations,
+                         self.v_layer_types,
+                         self.v_batch_sizes,
+                         'value'
+                         )
+        self.value.model.compile(loss='mse', optimizer=self.v_optimizer)
+
+        print("\nValue model: ")
+        print(self.value.print_model_summary())
 
     def _loss(self):
         """
-            Compute loss
+            Compute TRPO loss
         """
         # Log probabilities of new and old actions
         self.old_policy = tfp.distributions.Categorical(self.old_act_logits)
@@ -134,19 +151,31 @@ class TRPO:
         assert start == self.size_params, "Wrong shapes."
 
     def _init_session(self):
-            """Launch TensorFlow session and initialize variables"""
-            self.sess.run(self.init)
+        """
+            Initialize tensorflow graph
+        """
+        self.sess.run(self.init)
 
     def get_flat_params(self):
+        """
+            Retrieve policy parameters
+        """
         return self.sess.run(self.flat_params)
 
     def set_flat_params(self, params):
+        """
+            Update policy parameters.
+
+            :param params: New policy parameters required to update policy
+        """
         feed_dict = {self.flat_params_ph: params}
         self.sess.run(self.param_update, feed_dict=feed_dict)
 
     def update_policy(self, feed_dict):
         """
             Update policy parameters
+
+            :param feed_dict: Dictionary to feed into tensorflow graph
         """
         # Get previous parameters
         prev_params = self.get_flat_params()
@@ -176,10 +205,18 @@ class TRPO:
 
     def update_value(self, prev_paths):
         """
-            Update paths
+            Update value function
+
+            :param prev_paths: Processed data from previous iteration (to avoid overfitting)
         """
 
     def process_paths(self, paths):
+        """
+            Process data
+
+            :param paths: Obtain unprocessed data from training
+            :return: feed_dict: Dict required for neural network training
+        """
         paths = np.asarray(paths)
 
         # Process paths

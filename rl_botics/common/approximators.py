@@ -9,7 +9,7 @@ class MLP:
     """
     Multi-Layered Perceptron
     """
-    def __init__(self, sess, input_ph, sizes, activations, layer_types, scope='MLP'):
+    def __init__(self, sess, input_ph, sizes, activations, layer_types, batch_size=None, scope='MLP'):
         """
         :param sess: Tensorflow session
         :param input_ph: Input tensor
