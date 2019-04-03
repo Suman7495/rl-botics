@@ -8,6 +8,7 @@ from keras.optimizers import Adam
 from rl_botics.common.approximators import *
 from rl_botics.common.data_collection import *
 from rl_botics.common.policies import *
+from rl_botics.common.utils import *
 import hyperparameters as h
 from utils import *
 
@@ -237,20 +238,12 @@ class TRPO:
         obs = np.concatenate(paths[:, 0]).reshape(-1, self.obs_dim)
         new_obs = np.concatenate(paths[:, 3]).reshape(-1, self.obs_dim)
         act = paths[:, 1].reshape(-1,1)
-        rew = paths[:, 2].reshape(-1,1)
-        done = paths[:, -1]
-        # TODO: Compute advantages and GAE
-        g = np.zeros_like(rew)
-        g_next = 0
-        for k in reversed(range(len(rew))):
-            if done[k]:
-                g[k] = 0
-            g[k] = rew[k] + self.gamma * g_next * (1.-done[k])
-            g_next = g[k]
 
+        # Computed expected return, values and advantages
+        expected_return = get_expected_return(paths, self.gamma)
         values = self.value.predict(obs)
+        adv = expected_return-values
 
-        adv = g-values
         # Generate feed_dict with data
         feed_dict = {self.obs: obs,
                      self.act: act,
