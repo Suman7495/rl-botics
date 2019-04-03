@@ -44,6 +44,7 @@ def get_trajectories(env, agent, max_transitions = 256, render=False):
         for transition in rollout(env, agent, render):
             data.append(transition)
             num_transitions += 1
+
         if num_transitions > max_transitions:
             break
 

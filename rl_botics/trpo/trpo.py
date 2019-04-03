@@ -110,18 +110,21 @@ class TRPO:
             Compute TRPO loss
         """
         # Log probabilities of new and old actions
-        self.old_policy = tfp.distributions.Categorical(self.old_act_logits)
         prob_ratio = tf.exp(self.policy.log_prob - self.old_log_probs)
 
-        # Surrogate Loss
+        # Policy parameter
         self.params = self.policy.vars
+
+        # Surrogate Loss
         self.surrogate_loss = -tf.reduce_mean(tf.multiply(prob_ratio, self.adv))
         self.pg = flatgrad(self.surrogate_loss, self.params)
 
-        # KL divergence and entropy
+        # KL divergence, entropy, surrogate loss
+        self.old_policy = tfp.distributions.Categorical(self.old_act_logits)
         self.kl = self.policy.act_dist.kl_divergence(self.old_policy)
         self.entropy = self.policy.entropy
         self.loss = self.surrogate_loss
+        self.losses = [self.kl, self.entropy, self.loss]
 
         # Compute Gradient Vector Product and Hessian Vector Product
         self.shapes = [list(param.shape) for param in self.params]
@@ -235,14 +238,23 @@ class TRPO:
         new_obs = np.concatenate(paths[:, 3]).reshape(-1, self.obs_dim)
         act = paths[:, 1].reshape(-1,1)
         rew = paths[:, 2].reshape(-1,1)
-
+        done = paths[:, -1]
         # TODO: Compute advantages and GAE
-        values = self.sess.run(self.value.output, feed_dict={self.obs: obs})
+        g = np.zeros_like(rew)
+        g_next = 0
+        for k in reversed(range(len(rew))):
+            if done[k]:
+                g[k] = 0
+            g[k] = rew[k] + self.gamma * g_next * (1.-done[k])
+            g_next = g[k]
 
+        values = self.value.predict(obs)
+
+        adv = g-values
         # Generate feed_dict with data
         feed_dict = {self.obs: obs,
                      self.act: act,
-                     self.adv: rew,
+                     self.adv: adv,
                      self.old_log_probs: self.policy.get_log_prob(obs, act),
                      self.old_act_logits: self.policy.get_old_act_logits(obs),
                      self.policy.act: act}

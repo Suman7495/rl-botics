@@ -48,4 +48,6 @@ class MLP:
         print(self.model.summary())
 
     def predict(self, x, batch_size=None):
-        return self.model.predict(x, batch_size)
+        feed_dict = {self.input: x}
+        y = self.sess.run(self.output, feed_dict=feed_dict)
+        return y
