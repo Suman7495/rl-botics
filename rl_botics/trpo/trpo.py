@@ -22,7 +22,7 @@ class TRPO:
         self.env = gym.make(args.env)
         self.obs_dim = self.env.observation_space.shape[0]
         self.act_dim = self.env.action_space.n
-        self.render = True
+        self.render = args.render
         self.env_continuous = False
 
         # Hyperparameters
@@ -257,13 +257,13 @@ class TRPO:
         """
             Train using TRPO algorithm
         """
-        paths = get_trajectories(self.env, self.policy)
+        paths = get_trajectories(self.env, self.policy, self.render)
         dct = self.process_paths(paths)
         self.update_policy(dct)
         prev_dct = dct
 
         for itr in range(self.maxiter):
-            paths = get_trajectories(self.env, self.policy)
+            paths = get_trajectories(self.env, self.policy, self.render)
             dct = self.process_paths(paths)
 
             # Update Policy

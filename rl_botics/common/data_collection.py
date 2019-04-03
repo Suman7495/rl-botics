@@ -6,7 +6,6 @@ def rollout(env, agent, render=False, timestep_limit=1000):
     """
         Execute one episode
     """
-    data = deque(maxlen=timestep_limit)
     obs = env.reset()
     for t in range(timestep_limit):
         if render:
@@ -25,7 +24,7 @@ def rollout(env, agent, render=False, timestep_limit=1000):
         obs = new_obs
 
 
-def get_trajectories(env, agent, max_transitions = 256, render=False):
+def get_trajectories(env, agent, render=False, max_transitions = 256):
     """
     :param env: Environment
     :param agent: Policy pi
