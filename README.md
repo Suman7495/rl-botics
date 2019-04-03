@@ -38,12 +38,12 @@ cd rl-botics
 ## Usage
 To run any algorithm in the default setting, simply run:
 ```
-cd <algo>
+cd rl_botics/<algo>/
 python main.py
 ```
 For example, to run TRPO:
 ```
-cd trpo
+cd rl_botics/trpo/
 python main.py
 ```
 ## Contributing
