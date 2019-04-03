@@ -46,8 +46,18 @@ For example, to run TRPO:
 cd rl_botics/trpo/
 python main.py
 ```
+### Algorithms
+The algorithms implemented are:
+- Q-Learning
+- Deep Q-Network
+- Vanilla Policy Gradient
+- Deep Deterministic Policy Gradient
+- Trust Region Policy Optimization
+- Compatible Natural Policy Gradient
 ## Contributing
 
 ## Credits
+Suman Pal
 
 ## License
+MIT License.
