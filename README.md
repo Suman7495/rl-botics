@@ -82,7 +82,7 @@ To contribute to this package, it is recommended to follow this structure:
 - `main.py` should contain at least the following functions:
   - `main`: Parses input argument, builds the environment and agent, and train the agent.
   - `argparse`: Parses input argument and loads default hyperparameters from `hyperparameter.py`.
-- `<algo>.py` should contain at least the following functions:
+- `<algo>.py` should contain at least the following methods:
   - `__init__`: Initializes the classes
   - `_build_graph`: Calls the following methods to build the TensorFlow graph: 
     - `_init_placeholders`: Initialize TensorFlow placeholders
