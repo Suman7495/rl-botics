@@ -93,6 +93,9 @@ To contribute to this package, it is recommended to follow this structure:
   - `update_policy`: Update the policy
   - `update_value`: Update the value function
   - `print_results`: Print the training results
+  - `process_paths`: (optional) Process collected trajectories to return the feed dictionary for TensorFlow
+
+It is recommended to check the structure of `ppo.py` and follow a similar structure.
 
 ## Credits
 Suman Pal
