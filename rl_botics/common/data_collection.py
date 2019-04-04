@@ -18,7 +18,7 @@ def rollout(env, agent, render=False, timestep_limit=1000):
         yield transition
 
         if done:
-            print("Terminated after %s timesteps" % t)
+            print("Terminated after %s timesteps" % str(t+1))
             break
 
         obs = new_obs
