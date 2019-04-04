@@ -53,6 +53,7 @@ The algorithms implemented are:
 - Vanilla Policy Gradient
 - Deep Deterministic Policy Gradient
 - Trust Region Policy Optimization
+- Proximal Policy Optimization
 - Compatible Natural Policy Gradient
 ## Contributing
 
