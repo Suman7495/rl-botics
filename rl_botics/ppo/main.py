@@ -1,3 +1,4 @@
+import gym, gym.spaces
 import argparse
 from ppo import *
 import tensorflow as tf
@@ -22,9 +23,9 @@ def main():
         Default environment: CartPole-v0
     """
     args = argparser()
-
+    env = gym.make(args.env)
     with tf.Session() as sess:
-        agent = PPO(args, sess)
+        agent = PPO(args, sess, env)
         print("Training agent...\n")
         agent.train()
         agent.print_results()

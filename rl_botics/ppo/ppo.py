@@ -1,10 +1,6 @@
-import gym, gym.spaces
 import tensorflow as tf
 import tensorflow_probability as tfp
 import numpy as np
-import random
-import matplotlib.pyplot as plt
-from keras.optimizers import Adam
 from rl_botics.common.approximators import *
 from rl_botics.common.data_collection import *
 from rl_botics.common.policies import *
@@ -14,12 +10,12 @@ from utils import *
 
 
 class PPO:
-    def __init__(self, args, sess):
+    def __init__(self, args, sess, env):
         """
         Initialize PPO class
         """
         self.sess = sess
-        self.env = gym.make(args.env)
+        self.env = env
         self.obs_dim = self.env.observation_space.shape[0]
         self.act_dim = self.env.action_space.n
         self.render = args.render
@@ -201,7 +197,7 @@ class PPO:
         act = paths[:, 1].reshape(-1,1)
 
         # Computed expected return, values and advantages
-        expected_return = get_expected_return(paths, self.gamma)
+        expected_return = get_expected_return(paths, self.gamma, normalize=True)
         values = self.value.predict(obs)
         adv = expected_return-values
 

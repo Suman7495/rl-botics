@@ -1,21 +1,15 @@
-import gym
-import gym.spaces
-import numpy as np
-import random
-import matplotlib.pyplot as plt
-import tensorflow as tf
-from keras.optimizers import Adam
+import hyperparameters as h
 from rl_botics.common.data_collection import *
 from rl_botics.common.policies import *
-import hyperparameters as h
+from rl_botics.common.utils import *
+import tensorflow as tf
 
 
 class REINFORCE:
-    def __init__(self, args, sess):
+    def __init__(self, args, sess, env):
         """
             Initialize REINFORCE agent class
         """
-        env = gym.make(args.env)
         self.sess = sess
         self.env = env
         self.obs_dim = self.env.observation_space.shape[0]
@@ -25,15 +19,23 @@ class REINFORCE:
         # Hyperparameters
         self.lr = args.lr
         self.gamma = args.gamma
-        self.num_ep = args.num_episodes
+        self.maxiter = 1000
         self.batch_size = args.batch_size
+        self.n_policy_epochs = 20
 
         # Parameters for the policy network
         self.pi_sizes = h.pi_sizes + [self.act_dim]
         self.pi_activations = h.pi_activations + ['relu']
         self.pi_layer_types = h.pi_layer_types + ['dense']
-        self.pi_optimizer = Adam(self.lr)
-        self.loss = 0
+        self.pi_batch_size = h.pi_batch_size
+        self.pi_optimizer = tf.train.AdamOptimizer(learning_rate=h.pi_lr)
+
+        # Parameters for the value network
+        self.v_sizes = h.v_sizes
+        self.v_activations = h.v_activations
+        self.v_layer_types = h.v_layer_types
+        self.v_batch_sizes = h.v_batch_sizes
+        self.v_optimizer = tf.train.AdamOptimizer(learning_rate=h.v_lr)
 
         # Initialize an empty reward list
         self.rew_list = []
@@ -56,35 +58,15 @@ class REINFORCE:
             Define Tensorflow placeholders
         """
         self.obs = tf.placeholder(dtype=tf.float32, shape=[None, self.obs_dim], name='obs')
-        self.act = tf.placeholder(dtype=tf.float32, shape=[None, self.act_dim], name='act')
-        self.adv = tf.placeholder(dtype=tf.float64, shape=[None, 1], name='adv')
+        self.act = tf.placeholder(dtype=tf.float32, shape=[None, 1], name='act')
+        self.adv = tf.placeholder(dtype=tf.float32, shape=[None, 1], name='adv')
 
-    def _build_graph_original(self):
-        """
-            Neural Network model of the REINFORCE agent
-        """
-        # hidden_dim = 2
-        # self.inputs = tf.placeholder(shape=[1, self.obs_dim],
-        #                              dtype=tf.float32)
-        # self.actions = tf.placeholder(dtype=tf.int32, name="action")
-        # self.discounted_rewards = tf.placeholder(dtype=tf.float32)
-        #
-        # W1 = tf.Variable(tf.random_uniform([self.obs_dim, hidden_dim]),
-        #                                     dtype=tf.float32)
-        # b1 = tf.Variable([hidden_dim], dtype = tf.float32)
-        # a1 = tf.nn.tanh(tf.matmul(self.inputs, W1)+b1)
-        #
-        # W2 = tf.Variable(tf.random_uniform([hidden_dim, self.act_dim]),
-        #                                     dtype=tf.float32)
-        # b2 = tf.Variable([self.act_dim], dtype=tf.float32)
-        # self.action_probs = tf.nn.softmax(tf.matmul(a1, W2)+ b2)
-        #
-        # self.picked_action_prob = tf.gather(self.action_probs[0],
-        #                                     self.actions)
-        #
-        # self.loss = -tf.log(self.picked_action_prob) * self.discounted_rewards
-        # optimizer = tf.train.AdamOptimizer(learning_rate = self.lr)
-        # self.updateModel = optimizer.minimize(self.loss)
+        # Policy old log prob and action logits (ouput of neural net)
+        self.old_log_probs = tf.placeholder(dtype=tf.float32, shape=[None, 1], name='old_log_probs')
+        self.old_act_logits = tf.placeholder(dtype=tf.float32, shape=[None, self.act_dim], name='old_act_logits')
+
+        # Target for value function
+        self.v_targ = tf.placeholder(dtype=tf.float32, shape=[None, 1], name='target_values')
 
     def _build_policy(self):
         """
@@ -92,25 +74,44 @@ class REINFORCE:
         """
         self.policy = MlpSoftmaxPolicy(self.sess,
                                        self.obs,
-                                       self.batch_size,
-                                       self.obs_dim,
                                        self.pi_sizes,
                                        self.pi_activations,
                                        self.pi_layer_types,
-                                       self.loss,
-                                       self.pi_optimizer)
+                                       self.pi_batch_size,
+                                       )
+        print("\nPolicy model: ")
         print(self.policy.print_model_summary())
 
     def _build_value_function(self):
         """
-            Build Value Function graph
+            Value function graph
         """
+        self.value = MLP(self.sess,
+                         self.obs,
+                         self.v_sizes,
+                         self.v_activations,
+                         self.v_layer_types,
+                         self.v_batch_sizes,
+                         'value'
+                         )
+        self.v_loss = tf.losses.mean_squared_error(self.value.output, self.v_targ)
+        self.v_train_step = self.v_optimizer.minimize(self.v_loss)
+
+        print("\nValue model: ")
+        print(self.value.print_model_summary())
 
     def _loss(self):
         """
          Loss graph
         """
-        self.loss = -self.policy.log_prob * self.adv
+        # Log probabilities of new and old actions
+        prob_ratio = tf.exp(self.policy.log_prob - self.old_log_probs)
+
+        # Surrogate Loss
+        self.loss = -tf.reduce_mean(tf.multiply(prob_ratio, self.adv))
+
+        # Policy update step
+        self.pi_train_step = self.pi_optimizer.minimize(self.loss)
 
     def _init_sess(self):
         """
@@ -118,103 +119,82 @@ class REINFORCE:
         """
         self.sess.run(self.init)
 
-
-    def discounted_rewards_norm(self):
+    def process_paths(self, paths):
         """
-            Compute the discounted rewards.
-            Note: Normalized rewards gives poorer performance
-        """       
-        discounted_rewards = np.zeros_like(self.ep_rew_list)
-        cumulative = 0.0
-        for i in reversed(range(len(self.ep_rew_list))):
-            cumulative = cumulative * self.gamma + self.ep_rew_list[i]
-            discounted_rewards[i] = cumulative        
-        # discounted_rewards -= np.mean(discounted_rewards)
-        # discounted_rewards /= np.std(discounted_rewards)
-        return discounted_rewards
+            Process data
+
+            :param paths: Obtain unprocessed data from training
+            :return feed_dict: Dict required for neural network training
+        """
+        paths = np.asarray(paths)
+
+        # Process paths
+        obs = np.concatenate(paths[:, 0]).reshape(-1, self.obs_dim)
+        new_obs = np.concatenate(paths[:, 3]).reshape(-1, self.obs_dim)
+        act = paths[:, 1].reshape(-1,1)
+
+        # Computed expected return, values and advantages
+        expected_return = get_expected_return(paths, self.gamma, normalize=True)
+        values = self.value.predict(obs)
+        adv = expected_return-values
+
+        # Generate feed_dict with data
+        feed_dict = {self.obs: obs,
+                     self.act: act,
+                     self.adv: adv,
+                     self.old_log_probs: self.policy.get_log_prob(obs, act),
+                     self.old_act_logits: self.policy.get_old_act_logits(obs),
+                     self.policy.act: act
+                     }
+        return feed_dict
+
+    def update_policy(self, feed_dict):
+        """
+        :param feed_dict:
+        """
+        for _ in range(self.n_policy_epochs):
+            self.sess.run(self.pi_train_step, feed_dict=feed_dict)
+
+    def update_value(self, prev_feed_dict):
+        """
+            Update value function
+
+            :param prev_feed_dict: Processed data from previous iteration (to avoid overfitting)
+        """
+        # TODO: train in epochs and batches
+        feed_dict = {self.obs: prev_feed_dict[self.obs],
+                     self.v_targ: prev_feed_dict[self.adv]
+                     }
+        self.v_train_step.run(feed_dict)
 
     def train(self):
         """
-            Train agent
+            Train using VPG algorithm
         """
-        for ep in range(int(self.num_ep)):
-            print("Iteration: ", ep)
-            paths = get_trajectories(self.env,
-                                     agent=self.policy,
-                                     max_transitions=self.batch_size,
-                                     render=self.render)
+        paths = get_trajectories(self.env, self.policy, self.render)
+        dct = self.process_paths(paths)
+        self.update_policy(dct)
+        prev_dct = dct
 
-            self.update_policy(paths)
-            self.update_value(paths)
+        for itr in range(self.maxiter):
+            paths = get_trajectories(self.env, self.policy, self.render)
+            dct = self.process_paths(paths)
 
-    def update_policy(self, paths):
+            # Update Policy
+            self.update_policy(dct)
 
-    def update_value(self, paths):
+            # Update value function
+            self.update_value(prev_dct)
 
+            # Update trajectories
+            prev_dct = dct
 
-    # def pick_action(self, state):
-    #     """
-    #         Choose action weighted by the action probability
-    #     """
-    #     action_prob = self.action_probs.eval(feed_dict
-    #                                     ={self.inputs:state[None, :]})
-    #     action = np.random.choice(np.arange(self.act_dim),
-    #                               p=action_prob[0])
-    #     return action
+            # TODO: Log data
 
-    # def train_original(self):
-    #     """
-    #         Train using REINFORCE algorithm
-    #     """
-    #     self.sess.run(tf.global_variables_initializer())
-    #     transit= collections.namedtuple("transition",
-    #                 ["state", "action", "reward", "next_state", "done"])
-    #     for ep in range(int(self.num_ep)):
-    #         state = self.env.reset()
-    #         tot_rew = 0
-    #         done = False
-    #         t = 0
-    #         episode = []
-    #         self.ep_rew_list = []
-    #         while t < 1000:
-    #             t += 1
-    #             if self.render and (ep%50 == 0):
-    #                 self.env.render()
-    #
-    #             act = self.pick_action(state)
-    #
-    #             # Get next state and reward from environment
-    #             next_state, rew, done, info = self.env.step(act)
-    #
-    #             # Store transition in memory
-    #             episode.append(transit(state=state, action=act,
-    #                     reward=rew, next_state=next_state, done=done))
-    #
-    #             # Store rewards
-    #             self.ep_rew_list.append(rew)
-    #             tot_rew += rew
-    #             state = next_state
-    #             if done:
-    #                 print("\nEpisode: {}/{}, score: {}"
-    #                       .format(ep, self.num_ep, t))
-    #                 break
-    #
-    #         self.rew_list.append(tot_rew)
-    #         discounted_rewards = self.discounted_rewards_norm()
-    #         for t, transition in enumerate(episode):
-    #             _, loss = self.sess.run([self.updateModel, self.loss],
-    #                                     feed_dict={self.inputs:[transition.state],
-    #                                                self.discounted_rewards:discounted_rewards[t],
-    #                                                self.actions:transition.action})
+        self.sess.close()
 
     def print_results(self):
         """
             Plot reward received over training period
         """
-        avg_rew = sum(self.rew_list)/self.num_ep
-        print ("Score over time: " + str(avg_rew))
-        plt.plot(self.rew_list)
-        plt.title("Returns")
-        plt.xlabel("Episodes")
-        plt.ylabel("Reward")
-        plt.show()
+
