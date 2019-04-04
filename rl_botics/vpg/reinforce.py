@@ -61,10 +61,6 @@ class REINFORCE:
         self.act = tf.placeholder(dtype=tf.float32, shape=[None, 1], name='act')
         self.adv = tf.placeholder(dtype=tf.float32, shape=[None, 1], name='adv')
 
-        # Policy old log prob and action logits (ouput of neural net)
-        self.old_log_probs = tf.placeholder(dtype=tf.float32, shape=[None, 1], name='old_log_probs')
-        self.old_act_logits = tf.placeholder(dtype=tf.float32, shape=[None, self.act_dim], name='old_act_logits')
-
         # Target for value function
         self.v_targ = tf.placeholder(dtype=tf.float32, shape=[None, 1], name='target_values')
 
@@ -104,11 +100,8 @@ class REINFORCE:
         """
          Loss graph
         """
-        # Log probabilities of new and old actions
-        prob_ratio = tf.exp(self.policy.log_prob - self.old_log_probs)
-
-        # Surrogate Loss
-        self.loss = -tf.reduce_mean(tf.multiply(prob_ratio, self.adv))
+        # Policy Loss
+        self.loss = -tf.reduce_mean(tf.multiply(tf.exp(policy.log_prob, self.adv)
 
         # Policy update step
         self.pi_train_step = self.pi_optimizer.minimize(self.loss)
@@ -142,8 +135,6 @@ class REINFORCE:
         feed_dict = {self.obs: obs,
                      self.act: act,
                      self.adv: adv,
-                     self.old_log_probs: self.policy.get_log_prob(obs, act),
-                     self.old_act_logits: self.policy.get_old_act_logits(obs),
                      self.policy.act: act
                      }
         return feed_dict
