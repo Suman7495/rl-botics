@@ -77,6 +77,22 @@ Each algorithm directory contains at least 3 files:
 Some algorithm directories may have additional files specific to the algorithm.
 
 ## Contributing
+To contribute to this package, it is recommended to follow this structure:
+- The new algorithm directory should at least contain the 3 files mentioned above.
+- `main.py` should contain at least the following functions:
+  - `main`: Parses input argument, builds the environment and agent, and train the agent.
+  - `argparse`: Parses input argument and loads default hyperparameters from `hyperparameter.py`.
+- `<algo>.py` should contain at least the following functions:
+  - `__init__`: Initializes the classes
+  - `_build_graph`: Calls appropriate methods to build the TensorFlow graph
+  - `_init_placeholders`: Initialize TensorFlow placeholders
+  - `_build_policy`: Build policy graph
+  - `_build_value_function`: Build value function graph
+  - `_loss`: Build policy loss function graph
+  - `train`: Main training loop called by `main.py`
+  - `update_policy`: Update the policy
+  - `update_value`: Update the value function
+  - `print_results`: Print the training results
 
 ## Credits
 Suman Pal
