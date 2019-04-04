@@ -74,8 +74,13 @@ class MlpPolicy(MLP):
     """
         TODO: Broken currently. Modify.
     """
-    def __init__(self, sess, input_dim, sizes, activations, layer_types, loss=None, optimizer=None, scope='MLP_Policy'):
-        super().__init__(sess, input_dim, sizes, activations, layer_types, loss, optimizer)
+    def __init__(self, sess, obs, sizes, activations, layer_types, batch_size=None, scope='Softmax'):
+        super().__init__(sess=sess,
+                         input_ph=obs,
+                         sizes=sizes,
+                         activations=activations,
+                         layer_types=layer_types,
+                         batch_size=batch_size)
 
     def pick_action(self, obs):
         obs = np.atleast_2d(obs)

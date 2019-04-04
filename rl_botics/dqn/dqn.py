@@ -9,7 +9,7 @@ from rl_botics.common.approximators import *
 from rl_botics.common.data_collection import *
 from rl_botics.common.policies import *
 import hyperparameters as h
-
+from replay_buffer import *
 
 class DQN:
     def __init__(self, args, sess):
@@ -53,12 +53,11 @@ class DQN:
             Neural Network model of the DQN agent
         """
         policy = MlpPolicy(self.sess,
-                     self.obs_dim,
+                     self.obs,
                      self.net_sizes,
                      self.net_activations,
-                     self.net_layer_types,
-                     self.net_loss,
-                     self.net_optimizer)
+                     self.net_layer_types
+                    )
         policy.print_model_summary()
         return policy
 
@@ -103,23 +102,3 @@ class DQN:
         plt.show()
 
 
-class ReplayBuffer:
-    def __init__(self, buffer_size, batch_size):
-        self.memory = deque(maxlen=buffer_size)
-        self.batch_size = batch_size
-
-    def add(self, paths):
-        if self.memory:
-            self.memory += paths
-        else:
-            self.memory = paths
-
-    def sample(self):
-        minibatch = random.sample(self.memory, self.batch_size)
-        return minibatch
-
-    def __len__(self):
-        """
-        :return: Current memory size
-        """
-        return len(self.memory)
