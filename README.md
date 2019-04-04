@@ -57,6 +57,16 @@ The algorithms implemented are:
 - Compatible Natural Policy Gradient
 
 ## Toolbox Structure
+All the algorithms are in the `rl_botics` directory. Each algorithm specified above has an individual directory.
+
+### Common
+The directory `common` contains common modular classes to easily build new algorithms.
+- `approximators`: Basic Deep Neural Networks
+- `data_collection`: Methods to interact with the environment and collect data
+- `logger`: Log training data and other information
+- `plotter`: Plot graphs
+- `policies`: Common policies such as Random Policy, Softmax Policy and Gaussian Policy
+- `utils`: Functions to compute the expected return and the Generalized Advantage Estimation (GAE)
 
 ## Contributing
 
