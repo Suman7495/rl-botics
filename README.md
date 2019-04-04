@@ -55,6 +55,9 @@ The algorithms implemented are:
 - Trust Region Policy Optimization
 - Proximal Policy Optimization
 - Compatible Natural Policy Gradient
+
+## Toolbox Structure
+
 ## Contributing
 
 ## Credits
