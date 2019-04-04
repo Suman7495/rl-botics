@@ -134,8 +134,7 @@ class REINFORCE:
         # Generate feed_dict with data
         feed_dict = {self.obs: obs,
                      self.act: act,
-                     self.adv: adv,
-                     self.policy.act: act
+                     self.adv: adv
                      }
         return feed_dict
 
