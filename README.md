@@ -84,11 +84,11 @@ To contribute to this package, it is recommended to follow this structure:
   - `argparse`: Parses input argument and loads default hyperparameters from `hyperparameter.py`.
 - `<algo>.py` should contain at least the following functions:
   - `__init__`: Initializes the classes
-  - `_build_graph`: Calls appropriate methods to build the TensorFlow graph
-  - `_init_placeholders`: Initialize TensorFlow placeholders
-  - `_build_policy`: Build policy graph
-  - `_build_value_function`: Build value function graph
-  - `_loss`: Build policy loss function graph
+  - `_build_graph`: Calls the following methods to build the TensorFlow graph: 
+    - `_init_placeholders`: Initialize TensorFlow placeholders
+    - `_build_policy`: Build policy graph
+    - `_build_value_function`: Build value function graph
+    - `_loss`: Build policy loss function graph
   - `train`: Main training loop called by `main.py`
   - `update_policy`: Update the policy
   - `update_value`: Update the value function
