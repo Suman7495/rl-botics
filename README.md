@@ -4,7 +4,17 @@ RL-botics is a toolbox with state-of-the-art implemntations of deep Reinforcemen
 The objective was to have modular, clean and easy to read codebase so that the research community may build on top with ease. The implementations can be integrated with OpenAI Gym environments.
 
 ## Prerequisites
-RL-botics requires `python3 (>=3.5)` and `git`.
+RL-botics requires:
+- [python3 (>=3.5)](https://www.python.org/downloads/)
+- [Scipy](https://www.scipy.org/)
+- [Numpy](http://www.numpy.org/)
+- [Matplotlib](https://matplotlib.org/)
+- [TensorFlow](https://www.tensorflow.org/)
+- [TensorFlow Probability](https://www.tensorflow.org/probability)
+- [Keras](https://keras.io/)
+
+It is strongly suggested to also have:
+- [OpenAI Gym](https://github.com/openai/gym)
 
 ### Conda Environment
 It is highly recommended to install this package in a virtual environment, such as Miniconda. Please find the Conda installation [here](https://conda.io/projects/conda/en/latest/user-guide/install/index.html).
@@ -18,16 +28,6 @@ To activate the environment:
 ```
 source activate RL
 ```
-
-### Required Packages
-Here are the main required packages:
-- [Keras](https://keras.io/)
-- [Tensorflow](https://www.tensorflow.org/)
-- [Numpy](http://www.numpy.org/)
-- [Matplotlib](https://matplotlib.org/)
-- [Scipy](https://www.scipy.org/)
-- [OpenAI Gym](https://github.com/openai/gym)
-
 ## Installation
 To install the package, we recommend cloning the original package:
 ```
