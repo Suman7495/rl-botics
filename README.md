@@ -68,6 +68,14 @@ The directory `common` contains common modular classes to easily build new algor
 - `policies`: Common policies such as Random Policy, Softmax Policy and Gaussian Policy
 - `utils`: Functions to compute the expected return and the Generalized Advantage Estimation (GAE)
 
+### Algorithm Directories
+Each algorithm directory contains at least 3 files:
+- `main.py`: Main script to run the algorithm
+- `hyperparameters.py`: File to contain the default hyperparameters
+- `<name>.py`: Implementation of the algorithm
+
+Some algorithm directories may have additional files specific to the algorithm.
+
 ## Contributing
 
 ## Credits
