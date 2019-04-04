@@ -1,3 +1,4 @@
+Status: currently broken, will be updated soon.
 # Overview
 This folder contains the implementation of a Deep Q-Network to solve the classic [CartPole-v0](https://gym.openai.com/envs/CartPole-v0/) environment from OpenAI's Gym.
 
