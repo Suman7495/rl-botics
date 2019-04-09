@@ -56,6 +56,11 @@ The algorithms implemented are:
 - Proximal Policy Optimization
 - Compatible Natural Policy Gradient
 
+To be added:
+- Relative Entropy Search
+- Soft Actor Critic
+- A3C/A2C
+
 ## Toolbox Structure
 All the algorithms are in the `rl_botics` directory. Each algorithm specified above has an individual directory.
 
