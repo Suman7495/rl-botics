@@ -1,5 +1,5 @@
 # RL-botics
-RL-botics is a toolbox with state-of-the-art implementations of deep Reinforcement Learning algorithms for robotics. 
+RL-botics is a toolbox with highly optimized implementations of deep Reinforcement Learning algorithms for robotics. 
 
 The objective was to have modular, clean and easy to read codebase so that the research community may build on top with ease. The implementations can be integrated with OpenAI Gym environments.
 
