@@ -77,7 +77,7 @@ The directory `common` contains common modular classes to easily build new algor
 Each algorithm directory contains at least 3 files:
 - `main.py`: Main script to run the algorithm
 - `hyperparameters.py`: File to contain the default hyperparameters
-- `<name>.py`: Implementation of the algorithm
+- `<algo>.py`: Implementation of the algorithm
 
 Some algorithm directories may have additional files specific to the algorithm.
 
