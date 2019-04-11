@@ -15,7 +15,7 @@ from utils import *
 class COPOS:
     def __init__(self, args, sess, env):
         """
-        Initialize TRPO class
+        Initialize COPOS class
         """
         self.sess = sess
         self.env = env
@@ -107,7 +107,7 @@ class COPOS:
 
     def _loss(self):
         """
-            Compute TRPO loss
+            Compute COPOS loss
         """
         # Log probabilities of new and old actions
         prob_ratio = tf.exp(self.policy.log_prob - self.old_log_probs)
@@ -254,7 +254,7 @@ class COPOS:
 
     def train(self):
         """
-            Train using TRPO algorithm
+            Train using COPOS algorithm
         """
         paths = get_trajectories(self.env, self.policy, self.render)
         dct = self.process_paths(paths)
