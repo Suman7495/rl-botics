@@ -18,7 +18,7 @@ def main():
     """
         Main script.
         Default environment: CartPole-v0
-        Import default from hyperparameters.py
+        Import default from .py
     """
 
     args = argparser()

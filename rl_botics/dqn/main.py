@@ -8,7 +8,7 @@ import gym, gym.spaces
 def argparser():
     """
     Input argument parser.
-    Loads default hyperparameters from hyperparameters.py
+    Loads default hyperparameters from .py
     :return: Parsed arguments
     """
     parser = argparse.ArgumentParser()

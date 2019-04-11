@@ -1,7 +1,7 @@
 import argparse
 from copos import *
 import tensorflow as tf
-import hyperparameters as h
+import hyperparmaters as h
 import gym, gym.spaces
 
 
