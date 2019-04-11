@@ -1,4 +1,4 @@
-### OVerview
+### Overview
 The folder contains an implementation of Tabular Q-Learning to solve the classic [FrozenLake-v0](https://gym.openai.com/envs/FrozenLake-v0/) from OpenAI's Gym.
 
 ## Resources
