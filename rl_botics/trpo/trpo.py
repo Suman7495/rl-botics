@@ -1,4 +1,3 @@
-import gym, gym.spaces
 import tensorflow as tf
 import tensorflow_probability as tfp
 import numpy as np
@@ -14,12 +13,12 @@ from utils import *
 
 
 class TRPO:
-    def __init__(self, args, sess):
+    def __init__(self, args, sess, env):
         """
         Initialize TRPO class
         """
         self.sess = sess
-        self.env = gym.make(args.env)
+        self.env = env
         self.obs_dim = self.env.observation_space.shape[0]
         self.act_dim = self.env.action_space.n
         self.render = args.render

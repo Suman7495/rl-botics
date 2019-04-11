@@ -1,4 +1,3 @@
-import gym, gym.spaces
 import numpy as np
 import random
 import matplotlib.pyplot as plt
@@ -11,13 +10,14 @@ from rl_botics.common.policies import *
 import hyperparameters as h
 from replay_buffer import *
 
+
 class DQN:
-    def __init__(self, args, sess):
+    def __init__(self, args, sess, env):
         """
             Initialize DQN agent class
         """
         self.sess = sess
-        self.env = gym.make(args.env)
+        self.env = env
         self.obs_dim = self.env.observation_space.shape[0]
         self.act_dim = self.env.action_space.n
         self.render = args.render

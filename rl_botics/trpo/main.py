@@ -2,6 +2,7 @@ import argparse
 from trpo import *
 import tensorflow as tf
 import hyperparameters as h
+import gym, gym.spaces
 
 
 def argparser():
@@ -22,9 +23,9 @@ def main():
         Default environment: CartPole-v0
     """
     args = argparser()
-
+    env = gym.make(args.env)
     with tf.Session() as sess:
-        agent = TRPO(args, sess)
+        agent = TRPO(args, sess, env)
         print("Training agent...\n")
         agent.train()
         agent.print_results()

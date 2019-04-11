@@ -2,6 +2,7 @@ import argparse
 import tensorflow as tf
 from dqn import *
 import hyperparameters as h
+import gym, gym.spaces
 
 
 def argparser():
@@ -32,9 +33,9 @@ def main():
         Main script.
     """
     args = argparser()
-
+    env = gym.make(args.env)
     with tf.Session() as sess:
-        agent = DQN(args, sess)
+        agent = DQN(args, sess, env)
         print("Training agent...\n")
         agent.train()
         print("Training completed successfully.\nPrinting Results.\n")
