@@ -6,6 +6,9 @@ import random
 
 
 class MlpSoftmaxPolicy(MLP):
+    """
+        General Softmax Policy with action logits from MLP output
+    """
     def __init__(self, sess, obs, sizes, activations, layer_types, batch_size=None, scope='Softmax'):
         super().__init__(sess=sess,
                          input_ph=obs,
@@ -23,7 +26,9 @@ class MlpSoftmaxPolicy(MLP):
 
         # Get output from Neural Network and create Softmax Distribution
         self.act_logits = self.model.output
-        self.act_dist = tfp.distributions.Categorical(logits=self.act_logits)
+        with tf.variable_scope(scope):
+            self.act_dist = tfp.distributions.Categorical(logits=self.act_logits)
+
         self.sampled_action = self.act_dist.sample()
 
         # Utilities
@@ -47,11 +52,36 @@ class MlpSoftmaxPolicy(MLP):
 
     def get_old_act_logits(self, obs):
         feed_dict = {self.obs: obs}
-        old_act_logits = self.sess.run(self.output, feed_dict=feed_dict)
+        old_act_logits = self.sess.run(self.act_logits, feed_dict=feed_dict)
         return old_act_logits
 
 
+class ParametrizedSoftmaxPolicy(MlpSoftmaxPolicy):
+    """
+        Parametrized Softmax Policy. Used particularly for COPOS
+    """
+    def __init__(self, sess, obs, sizes, activations, layer_types, batch_size=None, scope='ParametrizedSoftmax'):
+        super().__init__(sess, obs, sizes[:-1], activations[:-1], layer_types, batch_size, scope)
+        with tf.variable_scope(scope):
+            self.th = tf.get_variable(name="theta", shape=[sizes[-2], sizes[-1]],
+                                         initializer=tf.random_uniform_initializer(-0.1, 0.1))
+            self.act_logits = tf.matmul(self.model.output, self.th)
+            self.act_dist = tfp.distributions.Categorical(logits=self.act_logits)
+            self.sampled_action = self.act_dist.sample()
+
+            # Utilities
+            self.log_prob = tf.expand_dims(self.act_dist.log_prob(tf.squeeze(self.act, axis=-1)), axis=-1)
+            self.entropy = tf.reduce_mean(self.act_dist.entropy())
+
+        self.theta = tf.trainable_variables(scope=scope)
+        self.beta = self.vars
+
+        # Variable Lengths
+        self.theta_len = sizes[-2] * sizes[-1]
+
+
 class RandPolicy:
+    """ Random Policy """
     def __init__(self, sess, act_dim, std=1.0, name='pi'):
         self.sess = sess
         self.act_dim = act_dim
@@ -74,13 +104,14 @@ class MlpPolicy(MLP):
     """
         TODO: Broken currently. Modify.
     """
-    def __init__(self, sess, obs, sizes, activations, layer_types, batch_size=None, scope='Softmax'):
+    def __init__(self, sess, obs, sizes, activations, layer_types, batch_size=None, scope='MlpPolicy'):
         super().__init__(sess=sess,
                          input_ph=obs,
                          sizes=sizes,
                          activations=activations,
                          layer_types=layer_types,
                          batch_size=batch_size)
+        self.sizes = sizes
 
     def pick_action(self, obs):
         obs = np.atleast_2d(obs)

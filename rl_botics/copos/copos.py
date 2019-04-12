@@ -9,6 +9,7 @@ from rl_botics.common.data_collection import *
 from rl_botics.common.policies import *
 from rl_botics.common.utils import *
 import hyperparameters as h
+from dual import *
 from utils import *
 
 
@@ -29,7 +30,10 @@ class COPOS:
         self.maxiter = args.maxiter
         self.cg_damping = args.cg_damping
         self.batch_size = args.batch_size
+
+        # Constraints parameters
         self.kl_bound = args.kl_bound
+        self.ent_bound = args.ent_bound
 
         # Parameters for the policy network
         self.pi_sizes = h.pi_sizes + [self.act_dim]
@@ -70,20 +74,26 @@ class COPOS:
         self.old_log_probs = tf.placeholder(dtype=tf.float32, shape=[None, 1], name='old_log_probs')
         self.old_act_logits = tf.placeholder(dtype=tf.float32, shape=[None, self.act_dim], name='old_act_logits')
 
-        # Target for value function
+        # Target for value function.
         self.v_targ = tf.placeholder(dtype=tf.float32, shape=[None, 1], name='target_values')
+
+        # COPOS specific placeholders
+        # eta: log-linear parameters.
+        # beta: neural network nonlinear parameters
+        self.eta = tf.placeholder(dtype=tf.float32, shape=[], name="eta_ph")
+        self.omega = tf.placeholder(dtype=tf.float32, shape=[], name="omega_ph")
 
     def _build_policy(self):
         """
             Build Policy
         """
-        self.policy = MlpSoftmaxPolicy(self.sess,
-                                       self.obs,
-                                       self.pi_sizes,
-                                       self.pi_activations,
-                                       self.pi_layer_types,
-                                       self.pi_batch_size,
-                                       )
+        self.policy = ParametrizedSoftmaxPolicy(self.sess,
+                                                self.obs,
+                                                self.pi_sizes,
+                                                self.pi_activations,
+                                                self.pi_layer_types,
+                                                self.pi_batch_size,
+                                                )
         print("\nPolicy model: ")
         print(self.policy.print_model_summary())
 
@@ -113,7 +123,8 @@ class COPOS:
         prob_ratio = tf.exp(self.policy.log_prob - self.old_log_probs)
 
         # Policy parameter
-        self.params = self.policy.vars
+        # self.params = self.policy.vars
+        self.params = self.policy.theta + self.policy.beta
 
         # Surrogate Loss
         self.surrogate_loss = -tf.reduce_mean(tf.multiply(prob_ratio, self.adv))
@@ -125,6 +136,9 @@ class COPOS:
         self.entropy = self.policy.entropy
         self.loss = self.surrogate_loss
         self.losses = [self.kl, self.entropy, self.loss]
+
+        # Define Lagrangian
+        self._dual()
 
         # Compute Gradient Vector Product and Hessian Vector Product
         self.shapes = [list(param.shape) for param in self.params]
@@ -159,6 +173,28 @@ class COPOS:
 
         assert start == self.size_params, "Wrong shapes."
 
+    def _comp_val_fn(self, w):
+        """
+        :param w:
+        :return:
+        """
+        # TODO: Complete section
+        self.comp_val_fn = self.policy.act_logits
+
+    def _dual(self):
+        """
+            Computation of the COPOS dual function
+        """
+        sum_eta_omega = self.eta + self.omega
+        self.dual = self.eta * self.kl_bound + \
+                    self.omega * (self.ent_bound - self.entropy) + \
+                    sum_eta_omega * \
+                    tf.reduce_sum(tf.reduce_logsumexp((self.eta * self.policy.log_prob) / \
+                    sum_eta_omega, axis=1))
+
+        self.dual_grad = tf.gradients(ys=self.dual, xs=[self.eta, self.omega])
+
+
     def _init_session(self):
         """
             Initialize tensorflow graph
@@ -188,6 +224,8 @@ class COPOS:
         """
         # Get previous parameters
         prev_params = self.get_flat_params()
+        theta_old = prev_params[0:self.policy.theta_len]
+        beta_old = prev_params[self.policy.theta_len:]
 
         def get_pg():
             return self.sess.run(self.pg, feed_dict)
@@ -200,17 +238,45 @@ class COPOS:
             self.set_flat_params(params)
             return self.sess.run([self.loss, self.kl], feed_dict)
 
+        def get_dual():
+            dual, dual_grad = self.sess.run(dual, feed_dict)
+
         pg = get_pg()  # vanilla gradient
         if np.allclose(pg, 0):
             print("Got zero gradient. Not updating.")
             return
-        stepdir = cg(f_Ax=get_hvp, b=-pg)  # natural gradient direction
-        shs = 0.5 * stepdir.dot(get_hvp(stepdir))
-        lm = np.sqrt(shs / self.kl_bound)
-        fullstep = stepdir / lm
-        expected_improve = -pg.dot(stepdir) / lm
-        success, new_params = linesearch(get_loss, prev_params, fullstep, expected_improve, self.kl_bound)
+
+        w = cg(f_Ax=get_hvp, b=-pg)  # natural gradient direction
+
+        # COPOS
+        # TODO: Complete section
+        w_theta = w[0:self.policy.theta_len]
+        w_beta = w[self.policy.theta_len:]
+
+        x0 = 1
+        res = scipy.optimize.minimize(get_dual, x0,
+                                      method='SLSQP',
+                                      jac=True,
+                                      bounds=((1e-12, None), (1e-12, None)),
+                                      options={'ftol': 1e-12}
+                                      )
+        eta = res.x[0]
+        beta = res.x[1]
+
+        # TODO: Compute s by linesearch, or rescale eta by linesearch
+        s = 1
+        new_theta = (eta * theta_old + w_theta) / (eta + beta)
+        new_beta = beta_old + s * w_beta / eta
+        new_params = np.concatenate(new_theta, new_beta)
         self.set_flat_params(new_params)
+
+        # TRPO
+        # shs = 0.5 * stepdir.dot(get_hvp(stepdir))
+        # lm = np.sqrt(shs / self.kl_bound)
+        # fullstep = stepdir / lm
+        # expected_improve = -pg.dot(stepdir) / lm
+        # success, new_params = linesearch(get_loss, prev_params, fullstep, expected_improve, self.kl_bound)
+        # self.set_flat_params(new_params)
 
     def update_value(self, prev_feed_dict):
         """
