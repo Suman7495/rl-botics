@@ -4,12 +4,12 @@ import numpy as np
 import random
 import matplotlib.pyplot as plt
 from keras.optimizers import Adam
+import scipy.optimize
 from rl_botics.common.approximators import *
 from rl_botics.common.data_collection import *
 from rl_botics.common.policies import *
 from rl_botics.common.utils import *
 import hyperparameters as h
-from dual import *
 from utils import *
 
 
@@ -34,6 +34,8 @@ class COPOS:
         # Constraints parameters
         self.kl_bound = args.kl_bound
         self.ent_bound = args.ent_bound
+        self.eta = 1
+        self.omega = 0.5
 
         # Parameters for the policy network
         self.pi_sizes = h.pi_sizes + [self.act_dim]
@@ -80,8 +82,8 @@ class COPOS:
         # COPOS specific placeholders
         # eta: log-linear parameters.
         # beta: neural network nonlinear parameters
-        self.eta = tf.placeholder(dtype=tf.float32, shape=[], name="eta_ph")
-        self.omega = tf.placeholder(dtype=tf.float32, shape=[], name="omega_ph")
+        self.eta_ph = tf.placeholder(dtype=tf.float32, shape=[], name="eta_ph")
+        self.omega_ph = tf.placeholder(dtype=tf.float32, shape=[], name="omega_ph")
 
     def _build_policy(self):
         """
@@ -137,13 +139,14 @@ class COPOS:
         self.loss = self.surrogate_loss
         self.losses = [self.kl, self.entropy, self.loss]
 
-        # Define Lagrangian
-        self._dual()
-
         # Compute Gradient Vector Product and Hessian Vector Product
         self.shapes = [list(param.shape) for param in self.params]
         self.size_params = np.sum([np.prod(shape) for shape in self.shapes])
         self.flat_tangents = tf.placeholder(tf.float32, (self.size_params,), name='flat_tangents')
+
+        # Define Compatible Value Function and Lagrangian
+        self._comp_val_fn()
+        self._dual()
 
         # Compute gradients of KL wrt policy parameters
         grads = tf.gradients(self.kl, self.params)
@@ -173,27 +176,32 @@ class COPOS:
 
         assert start == self.size_params, "Wrong shapes."
 
-    def _comp_val_fn(self, w):
+    def _comp_val_fn(self):
         """
         :param w:
         :return:
         """
-        # TODO: Complete section
-        self.comp_val_fn = self.policy.act_logits
+        v_shape = self.policy.act_logits.shape
+        print(v_shape, self.size_params)
+        self.v_ph = tf.placeholder(dtype=tf.float32, shape=v_shape, name='dummy_var')
+        self.w_ph = tf.placeholder(dtype=tf.float32, shape=self.size_params, name='w_placeholder')
+
+        g = tf.gradients(self.policy.act_logits, self.params, grad_ys=self.v_ph)
+        # self.comp_val_fn = tf.gradients(g, self.v_ph, grad_ys=self.w_ph)
+        self.comp_val_fn = 1
 
     def _dual(self):
         """
             Computation of the COPOS dual function
         """
-        sum_eta_omega = self.eta + self.omega
-        self.dual = self.eta * self.kl_bound + \
-                    self.omega * (self.ent_bound - self.entropy) + \
+        sum_eta_omega = self.eta_ph + self.omega_ph
+        self.dual = self.eta_ph * self.kl_bound + \
+                    self.omega_ph * (self.ent_bound - self.entropy) + \
                     sum_eta_omega * \
-                    tf.reduce_sum(tf.reduce_logsumexp((self.eta * self.policy.log_prob) / \
+                    tf.reduce_sum(tf.reduce_logsumexp((self.eta_ph * self.policy.log_prob + self.comp_val_fn) / \
                     sum_eta_omega, axis=1))
 
-        self.dual_grad = tf.gradients(ys=self.dual, xs=[self.eta, self.omega])
-
+        self.dual_grad = tf.gradients(ys=self.dual, xs=[self.eta_ph, self.omega_ph])
 
     def _init_session(self):
         """
@@ -206,6 +214,7 @@ class COPOS:
             Retrieve policy parameters
         """
         return self.sess.run(self.flat_params)
+
 
     def set_flat_params(self, params):
         """
@@ -238,8 +247,16 @@ class COPOS:
             self.set_flat_params(params)
             return self.sess.run([self.loss, self.kl], feed_dict)
 
-        def get_dual():
-            dual, dual_grad = self.sess.run(dual, feed_dict)
+        def get_dual(x):
+            eta, omega = x
+            error_return_val = 1e6
+            if (eta + omega < 0) or (eta == 0):
+                print("Error in optimization!")
+                return error_return_val
+            feed_dict[self.eta_ph] = eta
+            feed_dict[self.omega_ph] = omega
+            dual, dual_grad = self.sess.run([self.dual, self.dual_grad], feed_dict)
+            return dual, np.asarray(dual_grad)
 
         pg = get_pg()  # vanilla gradient
         if np.allclose(pg, 0):
@@ -247,28 +264,33 @@ class COPOS:
             return
 
         w = cg(f_Ax=get_hvp, b=-pg)  # natural gradient direction
+        dummy_var = np.zeros((self.obs_dim, self.act_dim))
+        feed_dict[self.v_ph] = dummy_var
+        feed_dict[self.w_ph] = w
 
         # COPOS
         # TODO: Complete section
         w_theta = w[0:self.policy.theta_len]
         w_beta = w[self.policy.theta_len:]
 
-        x0 = 1
+        x0 = np.asarray([self.eta, self.omega])
         res = scipy.optimize.minimize(get_dual, x0,
                                       method='SLSQP',
                                       jac=True,
-                                      bounds=((1e-12, None), (1e-12, None)),
+                                      bounds=((1e-12, self.eta + 1e-3), (1e-12, 1000000)),
                                       options={'ftol': 1e-12}
                                       )
         eta = res.x[0]
-        beta = res.x[1]
+        omega = res.x[1]
 
         # TODO: Compute s by linesearch, or rescale eta by linesearch
         s = 1
-        new_theta = (eta * theta_old + w_theta) / (eta + beta)
+        new_theta = (eta * theta_old + w_theta) / (eta + omega)
         new_beta = beta_old + s * w_beta / eta
-        new_params = np.concatenate(new_theta, new_beta)
+        new_params = np.concatenate((new_theta, new_beta))
         self.set_flat_params(new_params)
+        self.eta = eta
+        self.omega = omega
 
         # TRPO
         # shs = 0.5 * stepdir.dot(get_hvp(stepdir))
