@@ -18,6 +18,7 @@ def get_expected_return(paths, gamma, normalize=True):
         g[k] = cumulative
 
     # Normalize
+    g = np.float32(g)
     if normalize:
         g -= np.mean(g)
         g /= np.std(g)

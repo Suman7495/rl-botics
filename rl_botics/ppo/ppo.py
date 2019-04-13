@@ -16,7 +16,14 @@ class PPO:
         """
         self.sess = sess
         self.env = env
-        self.obs_dim = self.env.observation_space.shape[0]
+        try:
+            self.obs_dim = self.env.observation_space.shape[0]
+        except:
+            self.obs_dim = self.env.observation_space.n
+
+        if args.env == 'Rock-v0':
+            self.obs_dim = 1
+
         self.act_dim = self.env.action_space.n
         self.render = args.render
         self.env_continuous = False
@@ -192,8 +199,13 @@ class PPO:
         paths = np.asarray(paths)
 
         # Process paths
-        obs = np.concatenate(paths[:, 0]).reshape(-1, self.obs_dim)
-        new_obs = np.concatenate(paths[:, 3]).reshape(-1, self.obs_dim)
+        if self.obs_dim>1:
+            obs = np.concatenate(paths[:, 0]).reshape(-1, self.obs_dim)
+            new_obs = np.concatenate(paths[:, 3]).reshape(-1, self.obs_dim)
+        else:
+            obs = paths[:, 0].reshape(-1, self.obs_dim)
+            new_obs = paths[:, 3].reshape(-1, self.obs_dim)
+
         act = paths[:, 1].reshape(-1,1)
 
         # Computed expected return, values and advantages

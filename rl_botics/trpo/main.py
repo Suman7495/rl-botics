@@ -3,6 +3,7 @@ from trpo import *
 import tensorflow as tf
 import hyperparameters as h
 import gym, gym.spaces
+import rl_botics.env.gym_pomdp
 
 
 def argparser():

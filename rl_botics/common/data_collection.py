@@ -7,18 +7,19 @@ def rollout(env, agent, render=False, timestep_limit=1000):
         Execute one episode
     """
     obs = env.reset()
+    ep_rew = 0
     for t in range(timestep_limit):
         if render:
             env.render()
         action = agent.pick_action(obs)
         new_obs, rew, done, info = env.step(action)
-
+        ep_rew += rew
         # Store transition
         transition = deque((obs, action, rew, new_obs, done))
         yield transition
 
         if done:
-            print("Terminated after %s timesteps" % str(t+1))
+            print("Terminated after %s timesteps with reward %s" % (str(t+1), str(ep_rew)))
             break
 
         obs = new_obs

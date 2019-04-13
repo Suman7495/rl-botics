@@ -3,7 +3,8 @@ import argparse
 from ppo import *
 import tensorflow as tf
 import hyperparameters as h
-
+import rl_botics
+import rl_botics.env.gym_pomdp
 
 def argparser():
     parser = argparse.ArgumentParser()
@@ -29,6 +30,23 @@ def main():
         print("Training agent...\n")
         agent.train()
         agent.print_results()
+
+    # env = gym.make("Rock-v0")
+    # ob = env.reset()
+    # print(ob)
+    # env.render()
+    # r = 0
+    # discount = 1.
+    # for i in range(400):
+    #     action =  np.random.choice(env._generate_legal(), 1)[0]
+    #     ob, rw, done, info = env.step(action)
+    #     print(ob)
+    #     env.render()
+    #     r += rw * discount
+    #     discount *= env._discount
+    #     if done:
+    #         break
+    # print(r)
 
 if __name__ == '__main__':
     main()
