@@ -134,10 +134,12 @@ class COPOS:
 
         # KL divergence, entropy, surrogate loss
         self.old_policy = tfp.distributions.Categorical(self.old_act_logits)
-        self.kl = self.policy.act_dist.kl_divergence(self.old_policy)
+        self.kl = self.old_policy.kl_divergence(self.policy.act_dist)
+        # self.kl = self.policy.act_dist.kl_divergence(self.old_policy)
         self.entropy = self.policy.entropy
-        self.loss = self.surrogate_loss
-        self.losses = [self.kl, self.entropy, self.loss]
+        self.old_entropy = self.old_policy.entropy()
+        self.ent_diff = self.entropy - self.old_entropy
+        self.losses = [self.surrogate_loss, self.kl, self.ent_diff]
 
         # Compute Gradient Vector Product and Hessian Vector Product
         self.shapes = [list(param.shape) for param in self.params]
@@ -178,17 +180,35 @@ class COPOS:
 
     def _comp_val_fn(self):
         """
-        :param w:
-        :return:
+            Compatible Value Approximation Graph
         """
-        v_shape = self.policy.act_logits.shape
-        print(v_shape, self.size_params)
-        self.v_ph = tf.placeholder(dtype=tf.float32, shape=v_shape, name='dummy_var')
-        self.w_ph = tf.placeholder(dtype=tf.float32, shape=self.size_params, name='w_placeholder')
+        # Compatible Weights
+        self.flat_comp_w = tf.placeholder(dtype=tf.float32, shape=[self.size_params], name='flat_comp_w')
+        comp_w = []
+        start = 0
+        for i, shape in enumerate(self.shapes):
+            size = np.prod(shape)
+            param = tf.reshape(self.flat_comp_w[start:start + size], shape)
+            comp_w.append(param)
+            start += size
 
-        g = tf.gradients(self.policy.act_logits, self.params, grad_ys=self.v_ph)
-        # self.comp_val_fn = tf.gradients(g, self.v_ph, grad_ys=self.w_ph)
-        self.comp_val_fn = 1
+        # Compatible Value Function Approximation
+        self.comp_val_fn = self.jvp(self.policy.act_logits, self.params, comp_w)
+
+    def jvp(self, f, x, u):
+        """
+            Computes the Jacobian-Vector Product: (df/dx)u
+            See: https://j-towns.github.io/2017/06/12/A-new-trick.html
+            and: https://github.com/renmengye/tensorflow-forward-ad/issues/2
+        :param f: Function to be differentiated
+        :param x: Variable
+        :param u: Vector to be multiplied with
+        :return: Jacobian Vector Product: (df/dx)u
+        """
+        self.v = tf.placeholder(tf.float32, shape=f.get_shape())
+        g = tf.gradients(f, x, grad_ys=self.v)
+        jvp = tf.gradients(g, self.v, grad_ys=u)
+        return jvp
 
     def _dual(self):
         """
@@ -198,7 +218,7 @@ class COPOS:
         self.dual = self.eta_ph * self.kl_bound + \
                     self.omega_ph * (self.ent_bound - self.entropy) + \
                     sum_eta_omega * \
-                    tf.reduce_sum(tf.reduce_logsumexp((self.eta_ph * self.policy.log_prob + self.comp_val_fn) / \
+                    tf.reduce_sum(tf.reduce_logsumexp((self.eta_ph * self.policy.log_prob + self.comp_val_fn) /
                     sum_eta_omega, axis=1))
 
         self.dual_grad = tf.gradients(ys=self.dual, xs=[self.eta_ph, self.omega_ph])
@@ -245,13 +265,13 @@ class COPOS:
 
         def get_loss(params):
             self.set_flat_params(params)
-            return self.sess.run([self.loss, self.kl], feed_dict)
+            return self.sess.run(self.losses, feed_dict)
 
         def get_dual(x):
             eta, omega = x
             error_return_val = 1e6
             if (eta + omega < 0) or (eta == 0):
-                print("Error in optimization!")
+                print("Error in dual optimization!")
                 return error_return_val
             feed_dict[self.eta_ph] = eta
             feed_dict[self.omega_ph] = omega
@@ -263,42 +283,60 @@ class COPOS:
             print("Got zero gradient. Not updating.")
             return
 
-        w = cg(f_Ax=get_hvp, b=-pg)  # natural gradient direction
-        dummy_var = np.zeros((self.obs_dim, self.act_dim))
-        feed_dict[self.v_ph] = dummy_var
-        feed_dict[self.w_ph] = w
+        # Obtain Compatible Weights w by Conjugate Gradient (alternative: minimise MSE which is more inefficient)
+        w = cg(f_Ax=get_hvp, b=-pg)
+        feed_dict[self.flat_comp_w] = w
+        feed_dict[self.v] = np.zeros((self.obs_dim, self.act_dim))
 
-        # COPOS
-        # TODO: Complete section
+        # Split compatible weights w in w_theta and w_beta
         w_theta = w[0:self.policy.theta_len]
         w_beta = w[self.policy.theta_len:]
 
+        # Solve constraint optimization of the dual to obtain Lagrange Multipliers eta, omega
         x0 = np.asarray([self.eta, self.omega])
+        eta_lower = np.max([self.eta - 1e-3, 1e-12])
+        eta_upper = self.eta + 1e-3
         res = scipy.optimize.minimize(get_dual, x0,
                                       method='SLSQP',
                                       jac=True,
-                                      bounds=((1e-12, self.eta + 1e-3), (1e-12, 1000000)),
+                                      bounds=((eta_lower, eta_upper), (1e-12, None)),
                                       options={'ftol': 1e-12}
                                       )
         eta = res.x[0]
         omega = res.x[1]
 
-        # TODO: Compute s by linesearch, or rescale eta by linesearch
-        s = 1
-        new_theta = (eta * theta_old + w_theta) / (eta + omega)
-        new_beta = beta_old + s * w_beta / eta
-        new_params = np.concatenate((new_theta, new_beta))
-        self.set_flat_params(new_params)
+        # TODO: Rescale eta to ensure constraint is satisfied. Is it really required?
+
+        def get_new_params():
+            new_theta = (eta * theta_old + w_theta) / (eta + omega)
+            new_beta = beta_old + s * w_beta / eta
+            new_params = np.concatenate((new_theta, new_beta))
+            return new_params
+
+        # Linesearch for stepsize s
+        surr, _, _ = get_loss(prev_params)
+        surr_before = np.mean(surr)
+        s = 1.0
+        for _ in range(10):
+            new_params = get_new_params()
+            sur, kl, ent_diff = get_loss(new_params)
+            mean_surr = np.mean(sur)
+            mean_kl = np.mean(kl)
+            mean_ent_diff = np.mean(ent_diff)
+            improve = mean_surr - surr_before
+            if mean_kl > self.kl_bound * 1.5:
+                print("KL bound exceeded.")
+            elif improve > 0:
+                print("Surrogate loss didn't improve.")
+            elif mean_ent_diff > self.ent_bound:
+                print("Entropy bound exceeded.")
+            else: break
+            s *= 0.5
+        else:
+            self.set_flat_params(prev_params)
+
         self.eta = eta
         self.omega = omega
-
-        # TRPO
-        # shs = 0.5 * stepdir.dot(get_hvp(stepdir))
-        # lm = np.sqrt(shs / self.kl_bound)
-        # fullstep = stepdir / lm
-        # expected_improve = -pg.dot(stepdir) / lm
-        # success, new_params = linesearch(get_loss, prev_params, fullstep, expected_improve, self.kl_bound)
-        # self.set_flat_params(new_params)
 
     def update_value(self, prev_feed_dict):
         """

@@ -133,6 +133,7 @@ class PPO:
 
         # KL divergence
         self.old_policy = tfp.distributions.Categorical(self.old_act_logits)
+        # self.kl = self.old_policy.kl_divergence(self.policy.act_dist)
         self.kl = self.policy.act_dist.kl_divergence(self.old_policy)
 
         # Loss terms
@@ -150,7 +151,7 @@ class PPO:
         self.losses = [self.loss, self.kl, self.entropy]
 
         # Policy update step
-        self.pi_train_step = self.pi_optimizer.minimize(self.loss)
+        self.policy_train_op = self.pi_optimizer.minimize(self.loss)
 
     def _init_session(self):
         """
@@ -165,7 +166,7 @@ class PPO:
             :param feed_dict: Dictionary to feed into tensorflow graph
         """
         for _ in range(self.n_policy_epochs):
-            self.sess.run(self.pi_train_step, feed_dict=feed_dict)
+            self.sess.run(self.policy_train_op, feed_dict=feed_dict)
             neg_policy_loss, kl, ent = self.sess.run(self.losses, feed_dict=feed_dict)
             mean_kl = np.mean(kl)
             if mean_kl > 4 * self.kl_target:

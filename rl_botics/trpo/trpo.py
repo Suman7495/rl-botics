@@ -127,10 +127,10 @@ class TRPO:
 
         # KL divergence, entropy, surrogate loss
         self.old_policy = tfp.distributions.Categorical(self.old_act_logits)
+        # self.kl = self.old_policy.kl_divergence(self.policy.act_dist)
         self.kl = self.policy.act_dist.kl_divergence(self.old_policy)
         self.entropy = self.policy.entropy
-        self.loss = self.surrogate_loss
-        self.losses = [self.kl, self.entropy, self.loss]
+        self.losses = [self.surrogate_loss, self.kl, self.entropy]
 
         # Compute Gradient Vector Product and Hessian Vector Product
         self.shapes = [list(param.shape) for param in self.params]
@@ -192,8 +192,6 @@ class TRPO:
 
             :param feed_dict: Dictionary to feed into tensorflow graph
         """
-        # Get previous parameters
-        prev_params = self.get_flat_params()
 
         def get_pg():
             return self.sess.run(self.pg, feed_dict)
@@ -204,19 +202,42 @@ class TRPO:
 
         def get_loss(params):
             self.set_flat_params(params)
-            return self.sess.run([self.loss, self.kl], feed_dict)
+            return self.sess.run(self.losses, feed_dict)
 
         pg = get_pg()  # vanilla gradient
         if np.allclose(pg, 0):
             print("Got zero gradient. Not updating.")
             return
+
+        # Get previous parameters
+        prev_params = self.get_flat_params()
+        loss_before = get_loss(prev_params)
+        surr_before = np.mean(loss_before[0])
         stepdir = cg(f_Ax=get_hvp, b=-pg)  # natural gradient direction
+        step_size = 1.0
         shs = 0.5 * stepdir.dot(get_hvp(stepdir))
         lm = np.sqrt(shs / self.kl_bound)
         fullstep = stepdir / lm
         expected_improve = -pg.dot(stepdir) / lm
-        success, new_params = linesearch(get_loss, prev_params, fullstep, expected_improve, self.kl_bound)
-        self.set_flat_params(new_params)
+
+        # Perform Linesearch
+        for itr in range(10):
+            new_params = prev_params + fullstep * step_size
+            surr_loss, kl, ent = get_loss(new_params)
+            mean_kl = np.mean(kl)
+            surr_loss = np.mean(surr_loss)
+            improve = surr_loss - surr_before
+            if mean_kl > self.kl_bound * 1.5:
+                print("KL bound exceeded.")
+            elif improve > 0:
+                print("Surrogate Loss didn't improve")
+            else:
+                break
+            step_size *= .5
+        else:
+            print("Failed to update. Keeping old parameters")
+            self.set_flat_params(prev_params)
+
 
     def update_value(self, prev_feed_dict):
         """

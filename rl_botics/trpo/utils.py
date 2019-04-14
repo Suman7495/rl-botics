@@ -9,9 +9,9 @@ def linesearch(f, x, fullstep, expected_improve_rate, kl_bound, max_backtracks=1
     fval = f(x)[0]
     for stepfrac in (.5 ** np.arange(max_backtracks)):
         xnew = x + stepfrac * fullstep
-        newfval, newkl = f(xnew)
-        # if newkl > kl_bound:
-        #     newfval += np.inf
+        newfval, newkl, newent = f(xnew)
+        if any(newkl) > kl_bound:
+            newfval += np.inf
         actual_improve = fval - newfval
         expected_improve = expected_improve_rate * stepfrac
         ratio = actual_improve / expected_improve
