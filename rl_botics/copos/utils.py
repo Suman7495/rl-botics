@@ -51,3 +51,35 @@ def flatgrad(loss, var_list):
     grads = tf.gradients(loss, var_list)
     return tf.concat([tf.reshape(g, [-1]) for g in grads], axis=0)
 
+
+def unflatten_params(flat_params, shapes):
+    """
+    :param shapes: Shapes of the flat parameters
+    :param flat_params: Flat parameters
+    :return: Unflattened Parameters
+    """
+    unflat_params = []
+    start = 0
+    for i, shape in enumerate(shapes):
+         size = np.prod(shape)
+         param = tf.reshape(flat_params[start:start + size], shape)
+         unflat_params.append(param)
+         start += size
+
+    return unflat_params
+
+
+def jvp(f, x, u, v):
+    """
+        Computes the Jacobian-Vector Product: (df/dx)u
+        See: https://j-towns.github.io/2017/06/12/A-new-trick.html
+        and: https://github.com/renmengye/tensorflow-forward-ad/issues/2
+    :param f: Function to be differentiated
+    :param x: Variable
+    :param u: Vector to be multiplied with
+    :param v: Dummy variable
+    :return: Jacobian Vector Product: (df/dx)u
+    """
+    g = tf.gradients(f, x, grad_ys=v)
+    jvp = tf.gradients(g, v, grad_ys=u)
+    return jvp

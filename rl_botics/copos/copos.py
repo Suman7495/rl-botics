@@ -113,6 +113,7 @@ class COPOS:
                          )
         self.v_loss = tf.losses.mean_squared_error(self.value.output, self.v_targ)
         self.v_train_step = self.v_optimizer.minimize(self.v_loss)
+        self.v_params = self.value.vars
 
         print("\nValue model: ")
         print(self.value.print_model_summary())
@@ -132,13 +133,17 @@ class COPOS:
         self.surrogate_loss = -tf.reduce_mean(tf.multiply(prob_ratio, self.adv))
         self.pg = flatgrad(self.surrogate_loss, self.params)
 
-        # KL divergence, entropy, surrogate loss
+        # KL divergence
         self.old_policy = tfp.distributions.Categorical(self.old_act_logits)
         self.kl = self.old_policy.kl_divergence(self.policy.act_dist)
         # self.kl = self.policy.act_dist.kl_divergence(self.old_policy)
+
+        # Entropy
         self.entropy = self.policy.entropy
         self.old_entropy = self.old_policy.entropy()
         self.ent_diff = self.entropy - self.old_entropy
+
+        # All losses
         self.losses = [self.surrogate_loss, self.kl, self.ent_diff]
 
         # Compute Gradient Vector Product and Hessian Vector Product
@@ -152,12 +157,7 @@ class COPOS:
 
         # Compute gradients of KL wrt policy parameters
         grads = tf.gradients(self.kl, self.params)
-        tangents = []
-        start = 0
-        for shape in self.shapes:
-            size = np.prod(shape)
-            tangents.append(tf.reshape(self.flat_tangents[start:start + size], shape))
-            start += size
+        tangents = unflatten_params(self.flat_tangents, self.shapes)
 
         # Gradient Vector Product
         gvp = tf.add_n([tf.reduce_sum(g * tangent) for (g, tangent) in zip(grads, tangents)])
@@ -180,35 +180,18 @@ class COPOS:
 
     def _comp_val_fn(self):
         """
-            Compatible Value Approximation Graph
+            Compatible Value Function Approximation Graph
         """
         # Compatible Weights
         self.flat_comp_w = tf.placeholder(dtype=tf.float32, shape=[self.size_params], name='flat_comp_w')
-        comp_w = []
-        start = 0
-        for i, shape in enumerate(self.shapes):
-            size = np.prod(shape)
-            param = tf.reshape(self.flat_comp_w[start:start + size], shape)
-            comp_w.append(param)
-            start += size
+        comp_w = unflatten_params(self.flat_comp_w, self.shapes)
 
         # Compatible Value Function Approximation
-        self.comp_val_fn = self.jvp(self.policy.act_logits, self.params, comp_w)
-
-    def jvp(self, f, x, u):
-        """
-            Computes the Jacobian-Vector Product: (df/dx)u
-            See: https://j-towns.github.io/2017/06/12/A-new-trick.html
-            and: https://github.com/renmengye/tensorflow-forward-ad/issues/2
-        :param f: Function to be differentiated
-        :param x: Variable
-        :param u: Vector to be multiplied with
-        :return: Jacobian Vector Product: (df/dx)u
-        """
-        self.v = tf.placeholder(tf.float32, shape=f.get_shape())
-        g = tf.gradients(f, x, grad_ys=self.v)
-        jvp = tf.gradients(g, self.v, grad_ys=u)
-        return jvp
+        # TODO: Verify equation
+        self.v = tf.placeholder(tf.float32, shape=self.policy.act_logits.get_shape())
+        jvp = jvp(self.policy.act_logits, self.params, comp_w, self.v)
+        expected_jvp = tf.reduce_mean(jvp)
+        self.comp_val_fn = jvp - expected_jvp
 
     def _dual(self):
         """
@@ -224,22 +207,19 @@ class COPOS:
         self.dual_grad = tf.gradients(ys=self.dual, xs=[self.eta_ph, self.omega_ph])
 
     def _init_session(self):
-        """
-            Initialize tensorflow graph
-        """
+        """ Initialize tensorflow graph """
         self.sess.run(self.init)
 
     def get_flat_params(self):
         """
             Retrieve policy parameters
+            :return: Flattened parameters
         """
         return self.sess.run(self.flat_params)
-
 
     def set_flat_params(self, params):
         """
             Update policy parameters.
-
             :param params: New policy parameters required to update policy
         """
         feed_dict = {self.flat_params_ph: params}
@@ -248,7 +228,6 @@ class COPOS:
     def update_policy(self, feed_dict):
         """
             Update policy parameters
-
             :param feed_dict: Dictionary to feed into tensorflow graph
         """
         # Get previous parameters
@@ -285,12 +264,13 @@ class COPOS:
 
         # Obtain Compatible Weights w by Conjugate Gradient (alternative: minimise MSE which is more inefficient)
         w = cg(f_Ax=get_hvp, b=-pg)
-        feed_dict[self.flat_comp_w] = w
-        feed_dict[self.v] = np.zeros((self.obs_dim, self.act_dim))
-
         # Split compatible weights w in w_theta and w_beta
         w_theta = w[0:self.policy.theta_len]
         w_beta = w[self.policy.theta_len:]
+
+        # Add to feed_dict
+        feed_dict[self.flat_comp_w] = w
+        feed_dict[self.v] = np.zeros((self.obs_dim, self.act_dim))
 
         # Solve constraint optimization of the dual to obtain Lagrange Multipliers eta, omega
         x0 = np.asarray([self.eta, self.omega])
@@ -327,8 +307,10 @@ class COPOS:
             if mean_kl > self.kl_bound * 1.5:
                 print("KL bound exceeded.")
             elif improve > 0:
+                # TODO: Remove print and log information
                 print("Surrogate loss didn't improve.")
             elif mean_ent_diff > self.ent_bound:
+                # TODO: Remove print and log information
                 print("Entropy bound exceeded.")
             else: break
             s *= 0.5
@@ -341,13 +323,11 @@ class COPOS:
     def update_value(self, prev_feed_dict):
         """
             Update value function
-
             :param prev_feed_dict: Processed data from previous iteration (to avoid overfitting)
         """
         # TODO: train in epochs and batches
         feed_dict = {self.obs: prev_feed_dict[self.obs],
-                     self.v_targ: prev_feed_dict[self.adv]
-                    }
+                     self.v_targ: prev_feed_dict[self.adv]}
         self.v_train_step.run(feed_dict)
 
     def process_paths(self, paths):

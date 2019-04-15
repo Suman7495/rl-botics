@@ -113,12 +113,12 @@ class TRPO:
 
     def _loss(self):
         """
-            Compute TRPO loss
+            Build TRPO loss Tensorflow computation graph
         """
         # Log probabilities of new and old actions
         prob_ratio = tf.exp(self.policy.log_prob - self.old_log_probs)
 
-        # Policy parameter
+        # Policy parameters
         self.params = self.policy.vars
 
         # Surrogate Loss
@@ -129,7 +129,10 @@ class TRPO:
         self.old_policy = tfp.distributions.Categorical(self.old_act_logits)
         # self.kl = self.old_policy.kl_divergence(self.policy.act_dist)
         self.kl = self.policy.act_dist.kl_divergence(self.old_policy)
+        # Entropy
         self.entropy = self.policy.entropy
+
+        # All losses
         self.losses = [self.surrogate_loss, self.kl, self.entropy]
 
         # Compute Gradient Vector Product and Hessian Vector Product
@@ -139,12 +142,7 @@ class TRPO:
 
         # Compute gradients of KL wrt policy parameters
         grads = tf.gradients(self.kl, self.params)
-        tangents = []
-        start = 0
-        for shape in self.shapes:
-            size = np.prod(shape)
-            tangents.append(tf.reshape(self.flat_tangents[start:start + size], shape))
-            start += size
+        tangents = unflatten_params(self.flat_tangents, self.shapes)
 
         # Gradient Vector Product
         gvp = tf.add_n([tf.reduce_sum(g * tangent) for (g, tangent) in zip(grads, tangents)])
@@ -157,6 +155,8 @@ class TRPO:
         self.param_update = []
         start = 0
         assert len(self.params) == len(self.shapes), "Wrong shapes."
+
+        # Update policy parameters
         for i, shape in enumerate(self.shapes):
             size = np.prod(shape)
             param = tf.reshape(self.flat_params_ph[start:start + size], shape)
@@ -174,13 +174,13 @@ class TRPO:
     def get_flat_params(self):
         """
             Retrieve policy parameters
+            :return: Flat parameters
         """
         return self.sess.run(self.flat_params)
 
     def set_flat_params(self, params):
         """
             Update policy parameters.
-
             :param params: New policy parameters required to update policy
         """
         feed_dict = {self.flat_params_ph: params}
@@ -189,8 +189,7 @@ class TRPO:
     def update_policy(self, feed_dict):
         """
             Update policy parameters
-
-            :param feed_dict: Dictionary to feed into tensorflow graph
+            :param feed_dict: Dictionary to feed into TensorFlow graph
         """
 
         def get_pg():
@@ -213,14 +212,16 @@ class TRPO:
         prev_params = self.get_flat_params()
         loss_before = get_loss(prev_params)
         surr_before = np.mean(loss_before[0])
-        stepdir = cg(f_Ax=get_hvp, b=-pg)  # natural gradient direction
+
+        # Compute Natural Gradient Direction using Conjugate Gradient Method
+        stepdir = cg(f_Ax=get_hvp, b=-pg)
         step_size = 1.0
         shs = 0.5 * stepdir.dot(get_hvp(stepdir))
         lm = np.sqrt(shs / self.kl_bound)
         fullstep = stepdir / lm
         expected_improve = -pg.dot(stepdir) / lm
 
-        # Perform Linesearch
+        # Perform Linesearch to rescale update stepsize
         for itr in range(10):
             new_params = prev_params + fullstep * step_size
             surr_loss, kl, ent = get_loss(new_params)
@@ -238,11 +239,9 @@ class TRPO:
             print("Failed to update. Keeping old parameters")
             self.set_flat_params(prev_params)
 
-
     def update_value(self, prev_feed_dict):
         """
             Update value function
-
             :param prev_feed_dict: Processed data from previous iteration (to avoid overfitting)
         """
         # TODO: train in epochs and batches
