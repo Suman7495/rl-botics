@@ -19,6 +19,7 @@ def linesearch(f, x, fullstep, expected_improve_rate, kl_bound, max_backtracks=1
             return True, xnew
     return False, x
 
+
 def cg(f_Ax, b, cg_iters=10, callback=None, residual_tol=1e-10):
     """
         Demmel p 312
@@ -47,8 +48,14 @@ def cg(f_Ax, b, cg_iters=10, callback=None, residual_tol=1e-10):
         callback(x)
     return x
 
-def flatgrad(loss, var_list):
-    grads = tf.gradients(loss, var_list)
+
+def flatgrad(y, x):
+    """
+    :param y: Function y
+    :param x: List of variable x
+    :return: Flattened gradients (dy/dx)
+    """
+    grads = tf.gradients(y, x)
     return tf.concat([tf.reshape(g, [-1]) for g in grads], axis=0)
 
 
@@ -77,7 +84,7 @@ def jvp(f, x, u, v):
     :param f: Function to be differentiated
     :param x: Variable
     :param u: Vector to be multiplied with
-    :param v: Dummy variable
+    :param v: Dummy variable (type tf.placeholder)
     :return: Jacobian Vector Product: (df/dx)u
     """
     g = tf.gradients(f, x, grad_ys=v)

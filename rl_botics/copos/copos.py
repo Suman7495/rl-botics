@@ -189,7 +189,9 @@ class COPOS:
         # Compatible Value Function Approximation
         # TODO: Verify equation
         self.v = tf.placeholder(tf.float32, shape=self.policy.act_logits.get_shape())
-        jvp = jvp(self.policy.act_logits, self.params, comp_w, self.v)
+
+        # Get Jacobian Vector Product (df/dx)u with v as a dummy variable
+        jvp = jvp(f=self.policy.act_logits, x=self.params, u=comp_w, v=self.v)
         expected_jvp = tf.reduce_mean(jvp)
         self.comp_val_fn = jvp - expected_jvp
 
@@ -280,14 +282,14 @@ class COPOS:
                                       method='SLSQP',
                                       jac=True,
                                       bounds=((eta_lower, eta_upper), (1e-12, None)),
-                                      options={'ftol': 1e-12}
-                                      )
+                                      options={'ftol': 1e-12})
         eta = res.x[0]
         omega = res.x[1]
 
         # TODO: Rescale eta to ensure constraint is satisfied. Is it really required?
 
         def get_new_params():
+            """ Return new parameters """
             new_theta = (eta * theta_old + w_theta) / (eta + omega)
             new_beta = beta_old + s * w_beta / eta
             new_params = np.concatenate((new_theta, new_beta))
