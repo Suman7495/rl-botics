@@ -5,7 +5,7 @@
 env_name           = 'CartPole-v0'
 render             = False
 gamma              = 0.99       # discount factor
-maxiter            = 10000      # number of learning iterations
+maxiter            = 1000      # number of learning iterations
 min_trans_per_iter = 3000       # minimum number of transition steps per iteration (if an episode ends before min_trans_per_iter is reached, a new one starts)
 
 # TRPO specific hyperparameters

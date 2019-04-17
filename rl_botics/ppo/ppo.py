@@ -5,6 +5,7 @@ from rl_botics.common.approximators import *
 from rl_botics.common.data_collection import *
 from rl_botics.common.policies import *
 from rl_botics.common.utils import *
+from rl_botics.common.plotter import *
 import hyperparameters as h
 from utils import *
 
@@ -16,6 +17,7 @@ class PPO:
         """
         self.sess = sess
         self.env = env
+        open('/tmp/rl_log.txt', 'w').close()
         try:
             self.obs_dim = self.env.observation_space.shape[0]
         except:
@@ -27,10 +29,12 @@ class PPO:
         self.act_dim = self.env.action_space.n
         self.render = args.render
         self.env_continuous = False
+        # self.logger = Logger(self.sess)
 
         # Hyperparameters
         self.gamma = args.gamma
-        self.maxiter = args.maxiter
+        # self.maxiter = args.maxiter
+        self.maxiter = 1000
         self.cg_damping = args.cg_damping
         self.batch_size = args.batch_size
         self.kl_bound = args.kl_bound
@@ -214,6 +218,8 @@ class PPO:
         values = self.value.predict(obs)
         adv = expected_return-values
 
+        # Log Data
+
         # Generate feed_dict with data
         feed_dict = {self.obs: obs,
                      self.act: act,
@@ -257,4 +263,5 @@ class PPO:
             Plot the results
         """
         # TODO: Finish this section
+        plot("PPO")
         return

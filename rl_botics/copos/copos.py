@@ -9,6 +9,7 @@ from rl_botics.common.approximators import *
 from rl_botics.common.data_collection import *
 from rl_botics.common.policies import *
 from rl_botics.common.utils import *
+from rl_botics.common.plotter import *
 import hyperparameters as h
 from utils import *
 
@@ -24,10 +25,12 @@ class COPOS:
         self.act_dim = self.env.action_space.n
         self.render = args.render
         self.env_continuous = False
-
+        self.filename = 'COPOS_log.txt'
+        open('/tmp/rl_log.txt', 'w').close()
         # Hyperparameters
         self.gamma = args.gamma
         self.maxiter = args.maxiter
+        self.maxiter = 1000
         self.cg_damping = args.cg_damping
         self.batch_size = args.batch_size
 
@@ -185,15 +188,17 @@ class COPOS:
         # Compatible Weights
         self.flat_comp_w = tf.placeholder(dtype=tf.float32, shape=[self.size_params], name='flat_comp_w')
         comp_w = unflatten_params(self.flat_comp_w, self.shapes)
+        comp_w_theta = comp_w[-1]
 
         # Compatible Value Function Approximation
         # TODO: Verify equation
         self.v = tf.placeholder(tf.float32, shape=self.policy.act_logits.get_shape())
 
         # Get Jacobian Vector Product (df/dx)u with v as a dummy variable
-        jvp = jvp(f=self.policy.act_logits, x=self.params, u=comp_w, v=self.v)
-        expected_jvp = tf.reduce_mean(jvp)
-        self.comp_val_fn = jvp - expected_jvp
+        jacob_vec_prod = jvp(f=self.policy.act_logits, x=self.params, u=comp_w, v=self.v)
+        #jacob_vec_prod = jvp(f=self.policy.model.output, x=self.policy.beta, u=comp_w_theta, v=self.v)
+        expected_jvp = tf.reduce_mean(jacob_vec_prod)
+        self.comp_val_fn = jacob_vec_prod - expected_jvp
 
     def _dual(self):
         """
@@ -340,7 +345,12 @@ class COPOS:
             :return: feed_dict: Dict required for neural network training
         """
         paths = np.asarray(paths)
-
+        tot_rew = np.sum(paths[:,2])
+        ep_count = np.sum(paths[:,-1])
+        avg_rew = tot_rew / ep_count
+        filename = '/tmp/rl_log.txt'
+        with open(filename, 'a') as f:
+            f.write("\n%d" % (avg_rew))
         # Process paths
         obs = np.concatenate(paths[:, 0]).reshape(-1, self.obs_dim)
         new_obs = np.concatenate(paths[:, 3]).reshape(-1, self.obs_dim)
@@ -391,4 +401,5 @@ class COPOS:
             Plot the results
         """
         # TODO: Finish this section
+        plot("COPOS")
         return

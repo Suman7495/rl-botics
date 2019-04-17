@@ -8,6 +8,7 @@ from rl_botics.common.approximators import *
 from rl_botics.common.data_collection import *
 from rl_botics.common.policies import *
 from rl_botics.common.utils import *
+from rl_botics.common.plotter import *
 import hyperparameters as h
 from utils import *
 
@@ -23,7 +24,7 @@ class TRPO:
             self.obs_dim = self.env.observation_space.shape[0]
         except:
             self.obs_dim = self.env.observation_space.n
-
+        open('/tmp/rl_log.txt', 'w').close()
         if args.env == 'Rock-v0':
             self.obs_dim = 1
         self.act_dim = self.env.action_space.n
@@ -258,6 +259,12 @@ class TRPO:
             :return: feed_dict: Dict required for neural network training
         """
         paths = np.asarray(paths)
+        tot_rew = np.sum(paths[:,2])
+        ep_count = np.sum(paths[:,-1])
+        avg_rew = tot_rew / ep_count
+        filename = '/tmp/rl_log.txt'
+        with open(filename, 'a') as f:
+            f.write("\n%d" % (avg_rew))
 
         # Process paths
         if self.obs_dim>1:
@@ -313,4 +320,5 @@ class TRPO:
             Plot the results
         """
         # TODO: Finish this section
+        plot("TRPO")
         return

@@ -10,7 +10,7 @@ min_trans_per_iter = 3000       # minimum number of transition steps per iterati
 
 # TRPO specific hyperparameters
 kl_bound           = 0.005
-ent_bound          = 0.005
+ent_bound          = 0.0005
 cg_damping         = 1e-1       # conjugate gradient damping (for the diagonal entries)
 
 # Policy network parameters

@@ -14,6 +14,7 @@ def rollout(env, agent, render=False, timestep_limit=1000):
         action = agent.pick_action(obs)
         new_obs, rew, done, info = env.step(action)
         ep_rew += rew
+
         # Store transition
         transition = deque((obs, action, rew, new_obs, done))
         yield transition
