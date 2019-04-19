@@ -67,18 +67,19 @@ All the algorithms are in the `rl_botics` directory. Each algorithm specified ab
 
 ### Common
 The directory `common` contains common modular classes to easily build new algorithms.
-- `approximators`: Basic Deep Neural Networks
-- `data_collection`: Methods to interact with the environment and collect data
+- `approximators`: Basic Deep Neural Networks (Dense, Conv, LSTM).
+- `data_collection`: Performs rollouts and collect observations and rewards
 - `logger`: Log training data and other information
 - `plotter`: Plot graphs
-- `policies`: Common policies such as Random Policy, Softmax Policy and Gaussian Policy
-- `utils`: Functions to compute the expected return and the Generalized Advantage Estimation (GAE)
+- `policies`: Common policies such as Random, Softmax, Parametrized Softmax and Gaussian Policy
+- `utils`: Functions to compute the expected return, the Generalized Advantage Estimation (GAE), etc.
 
 ### Algorithm Directories
 Each algorithm directory contains at least 3 files:
 - `main.py`: Main script to run the algorithm
 - `hyperparameters.py`: File to contain the default hyperparameters
 - `<algo>.py`: Implementation of the algorithm
+- `utils.py`: (Optional) File containing some utility functions
 
 Some algorithm directories may have additional files specific to the algorithm.
 
@@ -92,9 +93,9 @@ To contribute to this package, it is recommended to follow this structure:
   - `__init__`: Initializes the classes
   - `_build_graph`: Calls the following methods to build the TensorFlow graph: 
     - `_init_placeholders`: Initialize TensorFlow placeholders
-    - `_build_policy`: Build policy graph
-    - `_build_value_function`: Build value function graph
-    - `_loss`: Build policy loss function graph
+    - `_build_policy`: Build policy TensorFlow graph
+    - `_build_value_function`: Build value function TensorFlow graph
+    - `_loss`: Build policy loss function TensorFlwo graph
   - `train`: Main training loop called by `main.py`
   - `update_policy`: Update the policy
   - `update_value`: Update the value function
