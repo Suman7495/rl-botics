@@ -50,17 +50,17 @@ python main.py
 ### Algorithms
 The algorithms implemented are:
 - Q-Learning
-- Deep Q-Network
-- Vanilla Policy Gradient
-- Deep Deterministic Policy Gradient
-- Trust Region Policy Optimization
-- Proximal Policy Optimization
-- Compatible Natural Policy Gradient
+- [Deep Q-Network](https://storage.googleapis.com/deepmind-media/dqn/DQNNaturePaper.pdf)
+- [Vanilla Policy Gradient](http://www-anw.cs.umass.edu/~barto/courses/cs687/williams92simple.pdf)
+- [Deep Deterministic Policy Gradient](https://arxiv.org/abs/1509.02971)
+- [Trust Region Policy Optimization](https://arxiv.org/abs/1502.05477)
+- [Proximal Policy Optimization](https://arxiv.org/abs/1707.06347)
+- [Compatible Natural Policy Gradient](https://arxiv.org/abs/1902.02823)
 
 To be added:
-- Relative Entropy Search
-- Soft Actor Critic
-- A3C/A2C
+- [Relative Entropy Search](http://jmlr.org/papers/v18/16-142.html)
+- [Soft Actor Critic](https://arxiv.org/abs/1801.01290)
+- [A3C](https://arxiv.org/abs/1602.01783)
 
 ## Toolbox Structure
 All the algorithms are in the `rl_botics` directory. Each algorithm specified above has an individual directory.
