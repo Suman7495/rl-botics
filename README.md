@@ -49,7 +49,7 @@ python main.py
 ```
 ### Algorithms
 The algorithms implemented are:
-- Q-Learning
+- [Q-Learning](https://link.springer.com/article/10.1007/BF00992698)
 - [Deep Q-Network](https://storage.googleapis.com/deepmind-media/dqn/DQNNaturePaper.pdf)
 - [Vanilla Policy Gradient](http://www-anw.cs.umass.edu/~barto/courses/cs687/williams92simple.pdf)
 - [Deep Deterministic Policy Gradient](https://arxiv.org/abs/1509.02971)
