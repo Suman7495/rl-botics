@@ -27,18 +27,23 @@ class COPOS:
         self.env_continuous = False
         self.filename = 'COPOS_log.txt'
         open('/tmp/rl_log.txt', 'w').close()
+
         # Hyperparameters
         self.gamma = args.gamma
         self.maxiter = args.maxiter
-        self.maxiter = 1000
+        self.maxiter = 500
         self.cg_damping = args.cg_damping
         self.batch_size = args.batch_size
-
+        self.min_trans_per_iter = args.min_trans_per_iter
+        self.iter = 1
+        self.ent_gain = np.linspace(1, 10, self.maxiter+1)
         # Constraints parameters
         self.kl_bound = args.kl_bound
         self.ent_bound = args.ent_bound
         self.eta = 1
         self.omega = 0.5
+        self.init_eta = self.eta
+        self.init_omega = self.omega
 
         # Parameters for the policy network
         self.pi_sizes = h.pi_sizes + [self.act_dim]
@@ -196,14 +201,14 @@ class COPOS:
 
         # Get Jacobian Vector Product (df/dx)u with v as a dummy variable
         jacob_vec_prod = jvp(f=self.policy.act_logits, x=self.params, u=comp_w, v=self.v)
-        #jacob_vec_prod = jvp(f=self.policy.model.output, x=self.policy.beta, u=comp_w_theta, v=self.v)
         expected_jvp = tf.reduce_mean(jacob_vec_prod)
-        self.comp_val_fn = jacob_vec_prod - expected_jvp
+        self.comp_val_fn = jacob_vec_prod -expected_jvp
 
     def _dual(self):
         """
             Computation of the COPOS dual function
         """
+        self.ent_bound *= self.ent_gain[self.iter]
         sum_eta_omega = self.eta_ph + self.omega_ph
         self.dual = self.eta_ph * self.kl_bound + \
                     self.omega_ph * (self.ent_bound - self.entropy) + \
@@ -255,9 +260,9 @@ class COPOS:
 
         def get_dual(x):
             eta, omega = x
-            error_return_val = 1e6
+            error_return_val = 1e6, np.array([0., 0.])
             if (eta + omega < 0) or (eta == 0):
-                print("Error in dual optimization!")
+                print("Error in dual optimization! Got eta: ", eta)
                 return error_return_val
             feed_dict[self.eta_ph] = eta
             feed_dict[self.omega_ph] = omega
@@ -281,51 +286,103 @@ class COPOS:
 
         # Solve constraint optimization of the dual to obtain Lagrange Multipliers eta, omega
         x0 = np.asarray([self.eta, self.omega])
-        eta_lower = np.max([self.eta - 1e-3, 1e-12])
-        eta_upper = self.eta + 1e-3
         res = scipy.optimize.minimize(get_dual, x0,
                                       method='SLSQP',
                                       jac=True,
-                                      bounds=((eta_lower, eta_upper), (1e-12, None)),
-                                      options={'ftol': 1e-12})
+                                      bounds=((1e-12, 1e+10), (1e-12, 1e+10)),
+                                      options={'ftol': 1e-16})
         eta = res.x[0]
         omega = res.x[1]
-
-        # TODO: Rescale eta to ensure constraint is satisfied. Is it really required?
 
         def get_new_params():
             """ Return new parameters """
             new_theta = (eta * theta_old + w_theta) / (eta + omega)
-            new_beta = beta_old + s * w_beta / eta
+            new_beta = beta_old + w_beta / eta
             new_params = np.concatenate((new_theta, new_beta))
             return new_params
 
-        # Linesearch for stepsize s
+        if eta and res.success:
+            self.eta = eta
+            self.omega = omega
+            update_params = None
+
+            surr, _, _ = get_loss(prev_params)
+            surr_before = np.mean(surr)
+            sur, kl, _ = get_loss(get_new_params())
+            mean_surr = np.mean(sur)
+            improve = mean_surr - surr_before
+            mean_kl = np.mean(kl)
+            if mean_kl < self.kl_bound * 1.5:
+                if improve < 0:
+                    update_params = get_new_params()
+                    self.set_flat_params(update_params)
+        else:
+            print("Failed: Iteration %d. Cause: Optimization 1." %(self.iter))
+            print(res.message)
+            self.set_flat_params(prev_params)
+            return
+
+        # Rescale Eta keeping Omega fixed with Binary Search
         surr, _, _ = get_loss(prev_params)
         surr_before = np.mean(surr)
-        s = 1.0
-        for _ in range(10):
+        min_gain = 0.1
+        max_gain = 10
+
+        gain = max_gain
+        best_params = None
+        for _ in range(50):
             new_params = get_new_params()
             sur, kl, ent_diff = get_loss(new_params)
             mean_surr = np.mean(sur)
             mean_kl = np.mean(kl)
             mean_ent_diff = np.mean(ent_diff)
             improve = mean_surr - surr_before
-            if mean_kl > self.kl_bound * 1.5:
-                print("KL bound exceeded.")
-            elif improve > 0:
-                # TODO: Remove print and log information
-                print("Surrogate loss didn't improve.")
-            elif mean_ent_diff > self.ent_bound:
-                # TODO: Remove print and log information
-                print("Entropy bound exceeded.")
-            else: break
-            s *= 0.5
-        else:
-            self.set_flat_params(prev_params)
+            if mean_kl < self.kl_bound * 1.5:
+                if improve < 0:
+                    self.eta = eta
+                    best_params = new_params
+                max_gain = gain
+            else:
+                min_gain = gain
 
-        self.eta = eta
-        self.omega = omega
+            # Update eta then gain
+            eta *= gain
+            gain = 0.5 * (min_gain + max_gain)
+
+        if best_params is not None:
+            self.set_flat_params(best_params)
+        elif update_params is not None:
+            print("Failed: Iteration %d. Cause: Binary Search. Updating approximate" % (self.iter))
+            self.set_flat_params(update_params)
+            return
+        else:
+            print("Failed: Iteration %d. Cause: Binary Search.Updating previous" % (self.iter))
+            self.set_flat_params(prev_params)
+            return
+
+        # Optimize Omega now with very slight variations in eta
+        x0 = np.asarray([self.eta, self.omega])
+        eta_lower = np.max([self.eta - 1e-3, 1e-12])
+        eta_upper = self.eta + 1e-3
+        res = scipy.optimize.minimize(get_dual, x0,
+                                      method='SLSQP',
+                                      jac=True,
+                                      bounds=((eta_lower, eta_upper), (1e-12, 1e+10)),
+                                      options={'ftol': 1e-16})
+        eta = res.x[0]
+        omega = res.x[1]
+
+        if eta and res.success:
+            print("Iter %d completed successfully with %f." % (self.iter, self.avg_rew))
+            self.eta = eta
+            self.omega = omega
+            new_params = get_new_params()
+            self.set_flat_params(new_params)
+        else:
+            print("Failed: Iteration %d. Cause: Optimization 2." % (self.iter))
+            print(res.message)
+
+            self.set_flat_params(prev_params)
 
     def update_value(self, prev_feed_dict):
         """
@@ -345,12 +402,16 @@ class COPOS:
             :return: feed_dict: Dict required for neural network training
         """
         paths = np.asarray(paths)
+
+        # Average episode reward for iteration
         tot_rew = np.sum(paths[:,2])
         ep_count = np.sum(paths[:,-1])
-        avg_rew = tot_rew / ep_count
+        self.avg_rew = tot_rew / ep_count
         filename = '/tmp/rl_log.txt'
         with open(filename, 'a') as f:
-            f.write("\n%d" % (avg_rew))
+            f.write("\n%d" % (self.avg_rew))
+            # print("Average reward: ", avg_rew)
+
         # Process paths
         obs = np.concatenate(paths[:, 0]).reshape(-1, self.obs_dim)
         new_obs = np.concatenate(paths[:, 3]).reshape(-1, self.obs_dim)
@@ -374,13 +435,14 @@ class COPOS:
         """
             Train using COPOS algorithm
         """
-        paths = get_trajectories(self.env, self.policy, self.render)
+        paths = get_trajectories(self.env, self.policy, self.render, self.min_trans_per_iter)
         dct = self.process_paths(paths)
         self.update_policy(dct)
         prev_dct = dct
 
         for itr in range(self.maxiter):
-            paths = get_trajectories(self.env, self.policy, self.render)
+            self.iter += 1
+            paths = get_trajectories(self.env, self.policy, self.render, self.min_trans_per_iter)
             dct = self.process_paths(paths)
 
             # Update Policy
@@ -393,7 +455,7 @@ class COPOS:
             prev_dct = dct
 
             # TODO: Log data
-
+        print(self.eta, self.omega)
         self.sess.close()
 
     def print_results(self):

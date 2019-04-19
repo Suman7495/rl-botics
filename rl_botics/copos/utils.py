@@ -2,7 +2,7 @@ import numpy as np
 import tensorflow as tf
 
 
-def linesearch(f, x, fullstep, expected_improve_rate, kl_bound, max_backtracks=10, accept_ratio=.1):
+def linesearch1(f, x, fullstep, expected_improve_rate, kl_bound, max_backtracks=10, accept_ratio=.1):
     """
     Backtracking linesearch, where expected_improve_rate is the slope dy/dx at the initial point
     """

@@ -38,6 +38,7 @@ class MlpSoftmaxPolicy(MLP):
     def pick_action(self, obs):
         feed_dict = {self.obs: np.atleast_2d(obs)}
         action = np.squeeze(self.sess.run(self.sampled_action, feed_dict=feed_dict))
+        action = action % 2
         return action
 
     def get_log_prob(self, obs, act):
@@ -122,4 +123,4 @@ class MlpPolicy(MLP):
             return random.randrange(self.sizes[-1])
         act_probs = np.squeeze(self.predict(obs))
         action = np.argmax(act_probs)
-        return action
+        return int(action)

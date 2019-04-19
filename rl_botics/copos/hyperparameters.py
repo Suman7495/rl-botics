@@ -5,11 +5,11 @@
 env_name           = 'CartPole-v0'
 render             = False
 gamma              = 0.99       # discount factor
-maxiter            = 10000      # number of learning iterations
-min_trans_per_iter = 3000       # minimum number of transition steps per iteration (if an episode ends before min_trans_per_iter is reached, a new one starts)
+maxiter            = 3000      # number of learning iterations
+min_trans_per_iter = 1024       # minimum number of transition steps per iteration (if an episode ends before min_trans_per_iter is reached, a new one starts)
 
 # TRPO specific hyperparameters
-kl_bound           = 0.005
+kl_bound           = 0.001
 ent_bound          = 0.0005
 cg_damping         = 1e-1       # conjugate gradient damping (for the diagonal entries)
 

@@ -33,11 +33,11 @@ class PPO:
 
         # Hyperparameters
         self.gamma = args.gamma
-        # self.maxiter = args.maxiter
-        self.maxiter = 1000
+        self.maxiter = args.maxiter
         self.cg_damping = args.cg_damping
         self.batch_size = args.batch_size
         self.kl_bound = args.kl_bound
+        self.min_trans_per_iter = args.min_trans_per_iter
 
         # PPO specific hyperparameters
         self.kl_target = 0.003
@@ -203,6 +203,15 @@ class PPO:
         """
         paths = np.asarray(paths)
 
+        # Average reward for iteration
+        tot_rew = np.sum(paths[:, 2])
+        ep_count = np.sum(paths[:, -1])
+        avg_rew = tot_rew / ep_count
+        filename = '/tmp/rl_log.txt'
+        with open(filename, 'a') as f:
+            f.write("\n%d" % (avg_rew))
+            print("Average reward: ", avg_rew)
+
         # Process paths
         if self.obs_dim>1:
             obs = np.concatenate(paths[:, 0]).reshape(-1, self.obs_dim)
@@ -236,13 +245,13 @@ class PPO:
         """
             Train using PPO algorithm
         """
-        paths = get_trajectories(self.env, self.policy, self.render)
+        paths = get_trajectories(self.env, self.policy, self.render, self.min_trans_per_iter)
         dct = self.process_paths(paths)
         self.update_policy(dct)
         prev_dct = dct
 
         for itr in range(self.maxiter):
-            paths = get_trajectories(self.env, self.policy, self.render)
+            paths = get_trajectories(self.env, self.policy, self.render, self.min_trans_per_iter)
             dct = self.process_paths(paths)
 
             # Update Policy

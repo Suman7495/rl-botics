@@ -16,6 +16,7 @@ def argparser():
     parser.add_argument('--batch_size', type=int, default=h.pi_batch_size)
     parser.add_argument('--cg_damping', type=float, default=h.cg_damping)
     parser.add_argument('--kl_bound', type=float, default=h.kl_bound)
+    parser.add_argument('--min_trans_per_iter', type=float, default=h.min_trans_per_iter)
     return parser.parse_args()
 
 def main():

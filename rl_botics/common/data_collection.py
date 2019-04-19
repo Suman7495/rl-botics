@@ -20,16 +20,18 @@ def rollout(env, agent, render=False, timestep_limit=1000):
         yield transition
 
         if done:
-            print("Terminated after %s timesteps with reward %s" % (str(t+1), str(ep_rew)))
+            # print("Terminated after %s timesteps with reward %s" % (str(t+1), str(ep_rew)))
             break
 
         obs = new_obs
 
 
-def get_trajectories(env, agent, render=False, max_transitions = 256):
+def get_trajectories(env, agent, render=False, min_transitions = 512):
     """
     :param env: Environment
     :param agent: Policy pi
+    :param render: Boolean. True to render env
+    :param min_transitions: Minimum timesteps to collect per iteration
     :return: Trajectories
              Each trajectory contains:
              [0] obs: Observation of the current state
@@ -46,7 +48,7 @@ def get_trajectories(env, agent, render=False, max_transitions = 256):
             data.append(transition)
             num_transitions += 1
 
-        if num_transitions > max_transitions:
+        if num_transitions > min_transitions:
             break
 
     return data

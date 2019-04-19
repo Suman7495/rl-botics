@@ -37,6 +37,7 @@ class TRPO:
         self.cg_damping = args.cg_damping
         self.batch_size = args.batch_size
         self.kl_bound = args.kl_bound
+        self.min_trans_per_iter = args.min_trans_per_iter
 
         # Parameters for the policy network
         self.pi_sizes = h.pi_sizes + [self.act_dim]
@@ -220,7 +221,7 @@ class TRPO:
         shs = 0.5 * stepdir.dot(get_hvp(stepdir))
         lm = np.sqrt(shs / self.kl_bound)
         fullstep = stepdir / lm
-        expected_improve = -pg.dot(stepdir) / lm
+        expected_improve_rate = -pg.dot(stepdir) / lm
 
         # Perform Linesearch to rescale update stepsize
         for itr in range(10):
@@ -229,6 +230,8 @@ class TRPO:
             mean_kl = np.mean(kl)
             surr_loss = np.mean(surr_loss)
             improve = surr_loss - surr_before
+            expected_improve = expected_improve_rate * step_size
+            ratio = improve / expected_improve
             if mean_kl > self.kl_bound * 1.5:
                 print("KL bound exceeded.")
             elif improve > 0:
@@ -249,6 +252,9 @@ class TRPO:
         feed_dict = {self.obs: prev_feed_dict[self.obs],
                      self.v_targ: prev_feed_dict[self.adv]
                     }
+        # for epoch in range(self.v_epochs):
+        #     for batch in range(self.v_batch_sizes):
+
         self.v_train_step.run(feed_dict)
 
     def process_paths(self, paths):
@@ -259,12 +265,15 @@ class TRPO:
             :return: feed_dict: Dict required for neural network training
         """
         paths = np.asarray(paths)
+
+        # Average reward for iteration
         tot_rew = np.sum(paths[:,2])
         ep_count = np.sum(paths[:,-1])
         avg_rew = tot_rew / ep_count
         filename = '/tmp/rl_log.txt'
         with open(filename, 'a') as f:
             f.write("\n%d" % (avg_rew))
+            print("Average reward: ", avg_rew)
 
         # Process paths
         if self.obs_dim>1:
@@ -293,13 +302,13 @@ class TRPO:
         """
             Train using TRPO algorithm
         """
-        paths = get_trajectories(self.env, self.policy, self.render)
+        paths = get_trajectories(self.env, self.policy, self.render, self.min_trans_per_iter)
         dct = self.process_paths(paths)
         self.update_policy(dct)
         prev_dct = dct
 
         for itr in range(self.maxiter):
-            paths = get_trajectories(self.env, self.policy, self.render)
+            paths = get_trajectories(self.env, self.policy, self.render, self.min_trans_per_iter)
             dct = self.process_paths(paths)
 
             # Update Policy
