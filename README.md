@@ -12,6 +12,7 @@ RL-botics requires:
 - [TensorFlow](https://www.tensorflow.org/)
 - [TensorFlow Probability](https://www.tensorflow.org/probability)
 - [Keras](https://keras.io/)
+- [Pandas](https://pandas.pydata.org/)
 
 It is strongly suggested to also have:
 - [OpenAI Gym](https://github.com/openai/gym)
