@@ -2,10 +2,10 @@
     Default hyperparameters CartPole-v0
 """
 # General hyperparameters
-env_name           = 'CartPole-v0'
+env_name           = 'LunarLander-v2'
 render             = False
 gamma              = 0.99       # discount factor
-maxiter            = 3000      # number of learning iterations
+maxiter            = 2000      # number of learning iterations
 min_trans_per_iter = 1024       # minimum number of transition steps per iteration (if an episode ends before min_trans_per_iter is reached, a new one starts)
 
 # PPO specific hyperparameters
@@ -30,6 +30,12 @@ v_batch_sizes       = 512
 v_epochs            = 20
 lambda_trace        = 0.95       # coefficient for generalized advantage
 
+# Intrinsic Curiosity Parameters
+fwd_sizes       = [64, 64]
+fwd_activations = ['relu', 'relu']
+fwd_layer_types = ['dense', 'dense']
+n_ic_epochs = 20
+
 
 # """
 #     Default hyperparameters Rock-v0
@@ -48,7 +54,7 @@ lambda_trace        = 0.95       # coefficient for generalized advantage
 # # Policy network parameters
 # pi_sizes           = [64, 64, 64]
 # pi_activations     = ['tanh','tanh', 'tanh']
-# pi_layer_types     = ['lstm','dense', 'dense']
+# pi_layer_types     = ['dense','dense', 'dense']
 # pi_lr              = 1e-4
 # pi_batch_size      = 64
 #

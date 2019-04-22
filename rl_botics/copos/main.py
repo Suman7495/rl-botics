@@ -3,7 +3,8 @@ from copos import *
 import tensorflow as tf
 import hyperparameters as h
 import gym, gym.spaces
-
+import rl_botics.env.gym_pomdp
+from rl_botics.envs.fvrs import *
 
 def argparser():
     parser = argparse.ArgumentParser()
@@ -25,7 +26,8 @@ def main():
         Default environment: CartPole-v0
     """
     args = argparser()
-    env = gym.make(args.env)
+    # env = gym.make(args.env)
+    env = HistoryEnv("Rock-v0", history_type='mixed_full_pomdp')
     with tf.Session() as sess:
         agent = COPOS(args, sess, env)
         print("Training agent...\n")

@@ -2,17 +2,29 @@ from collections import deque
 import numpy as np
 
 
-def rollout(env, agent, render=False, timestep_limit=1000):
+def rollout(env, agent, render=False, timestep_limit=1000, partial=False, hist_size=15):
     """
         Execute one episode
     """
     obs = env.reset()
     ep_rew = 0
+    if partial:
+        history = deque(maxlen=hist_size)
+        history.append(np.zeros_like(obs))
+        history.append(obs)
+
     for t in range(timestep_limit):
         if render:
             env.render()
-        action = agent.pick_action(obs)
+        if partial:
+            input = np.asarray(history).reshape(-1, obs.shape[0])
+            action = agent.pick_action(input)[-1]
+        else:
+            action = agent.pick_action(obs)
+
         new_obs, rew, done, info = env.step(action)
+        if partial:
+            history.append(new_obs)
         ep_rew += rew
 
         # Store transition
@@ -26,7 +38,7 @@ def rollout(env, agent, render=False, timestep_limit=1000):
         obs = new_obs
 
 
-def get_trajectories(env, agent, render=False, min_transitions = 512):
+def get_trajectories(env, agent, render=False, min_transitions=512):
     """
     :param env: Environment
     :param agent: Policy pi

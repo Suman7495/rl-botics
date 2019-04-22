@@ -25,8 +25,6 @@ class MLP:
             output = Input(tensor=self.input)
             for l, nh in enumerate(sizes):
                 if layer_types[l] == 'lstm':
-                    self.input = Input(tensor=K.expand_dims(output, 0))
-                    output = self.input
                     output = LSTM(nh, return_sequences=True)(output)
                 elif layer_types[l] == 'conv':
                     output =Conv2D(nh, activation=activations[l], name=str(l))(output)

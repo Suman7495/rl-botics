@@ -10,10 +10,10 @@ import hyperparameters as h
 from utils import *
 
 
-class PPO:
+class PPOICM:
     def __init__(self, args, sess, env):
         """
-        Initialize PPO class
+        Initialize PPO class with Intrinsic Curiosity Module (ICM)
         """
         self.sess = sess
         self.env = env
@@ -62,6 +62,13 @@ class PPO:
         self.v_batch_sizes = h.v_batch_sizes
         self.v_optimizer = tf.train.AdamOptimizer(learning_rate=h.v_lr)
 
+        # Parameters for Intrinsic Motivation network
+        self.fwd_sizes = h.fwd_sizes + [self.obs_dim]
+        self.fwd_activations = h.fwd_activations + [None]
+        self.fwd_layer_types = h.fwd_layer_types + ['dense']
+        self.n_ic_epochs = h.n_ic_epochs
+        self.ic_eta = 0.2
+
         # Build Tensorflow graph
         self._build_graph()
         self._init_session()
@@ -71,6 +78,7 @@ class PPO:
         self._init_placeholders()
         self._build_policy()
         self._build_value_function()
+        self._build_intrinsic_curiosity()
         self._loss()
         self.init = tf.global_variables_initializer()
 
@@ -80,6 +88,7 @@ class PPO:
         """
         # Observations, actions, advantages
         self.obs = tf.placeholder(dtype=tf.float32, shape=[None, self.obs_dim], name='obs')
+        self.new_obs = tf.placeholder(dtype=tf.float32, shape=[None, self.obs_dim], name='new_obs')
         self.act = tf.placeholder(dtype=tf.float32, shape=[None, 1], name='act')
         self.adv = tf.placeholder(dtype=tf.float32, shape=[None, 1], name='adv')
 
@@ -126,6 +135,25 @@ class PPO:
         print("\nValue model: ")
         print(self.value.print_model_summary())
 
+    def _build_intrinsic_curiosity(self):
+        """
+            Intrinsic Curiosity Module
+            https://arxiv.org/pdf/1705.05363.pdf#cite.fu2017ex2
+        """
+        # Forward model: phi_hat_{t+1} = f(phi_t, a_t) (Eq.4 & 5 in paper)
+        self.fwd_model = MLP(self.sess,
+                                 tf.concat([self.obs, self.policy.act], axis=1),
+                                 self.fwd_sizes,
+                                 self.fwd_activations,
+                                 self.fwd_layer_types
+                                )
+
+        self.fwd_loss = 0.5 * tf.losses.mean_squared_error(self.fwd_model.output, self.new_obs)
+        self.fwd_train_step = tf.train.AdamOptimizer(learning_rate=0.001).minimize(self.fwd_loss)
+
+        # Curiosity Reward
+        self.curiosity = self.ic_eta * 0.5 * tf.reduce_mean(tf.square(self.fwd_model.output - self.new_obs), axis=1)
+
     def _loss(self):
         """
             Compute PPO loss
@@ -156,7 +184,7 @@ class PPO:
         self.losses = [self.loss, self.kl, self.entropy]
 
         # Policy update step
-        self.policy_train_op = self.pi_optimizer.minimize(self.loss)
+        self.policy_train_step = self.pi_optimizer.minimize(self.loss)
 
     def _init_session(self):
         """
@@ -171,7 +199,7 @@ class PPO:
             :param feed_dict: Dictionary to feed into tensorflow graph
         """
         for _ in range(self.n_policy_epochs):
-            self.sess.run(self.policy_train_op, feed_dict=feed_dict)
+            self.sess.run(self.policy_train_step, feed_dict=feed_dict)
             neg_policy_loss, kl, ent = self.sess.run(self.losses, feed_dict=feed_dict)
             mean_kl = np.mean(kl)
             if mean_kl > 4 * self.kl_target:
@@ -195,6 +223,13 @@ class PPO:
                     }
         self.v_train_step.run(feed_dict)
 
+    def update_intrinsic_curiosity(self, feed_dict):
+        """
+            Update Intrinsic Curiosity Network
+        """
+        for _ in range(self.n_ic_epochs):
+            self.sess.run(self.fwd_train_step, feed_dict=feed_dict)
+
     def process_paths(self, paths):
         """
             Process data
@@ -211,7 +246,6 @@ class PPO:
         filename = '/tmp/rl_log.txt'
         with open(filename, 'a') as f:
             f.write("\n%d" % (avg_rew))
-            print("Average reward: ", avg_rew)
 
         # Process paths
         if self.obs_dim>1:
@@ -224,14 +258,26 @@ class PPO:
         act = paths[:, 1].reshape(-1,1)
 
         # Computed expected return, values and advantages
-        expected_return = get_expected_return(paths, self.gamma, normalize=True)
+        expected_return = get_expected_return(paths, self.gamma, normal=True)
         values = self.value.predict(obs)
         adv = expected_return-values
 
+        # Add curiosity to advantage
+        curiosity, fwd_out = self.sess.run([self.curiosity, self.fwd_model.output],
+                                  feed_dict={self.obs: obs,
+                                             self.new_obs: new_obs,
+                                             self.policy.act: act,
+                                            }
+                                  )
+        curiosity = normalize(curiosity.reshape(-1, 1))
+        print("Average reward: ", avg_rew, "        Mean Curiosity: ", np.mean(curiosity))
+
+        # adv = normalize(adv + curiosity)
         # Log Data
 
         # Generate feed_dict with data
         feed_dict = {self.obs: obs,
+                     self.new_obs: new_obs,
                      self.act: act,
                      self.adv: adv,
                      self.old_log_probs: self.policy.get_log_prob(obs, act),
@@ -260,6 +306,9 @@ class PPO:
 
             # Update value function
             self.update_value(prev_dct)
+
+            # Update intrinsic curiosity
+            self.update_intrinsic_curiosity(dct)
 
             # Update trajectories
             prev_dct = dct

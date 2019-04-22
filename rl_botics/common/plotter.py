@@ -18,3 +18,5 @@ def plot(title):
     plt.tight_layout()
     plt.show()
     print("Completed")
+
+# plot("COPOS - FVRS")

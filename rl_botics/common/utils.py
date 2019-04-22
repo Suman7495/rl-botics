@@ -1,7 +1,7 @@
 import numpy as np
 
 
-def get_expected_return(paths, gamma, normalize=True):
+def get_expected_return(paths, gamma, normal=True):
     """
     :param paths: raw paths from data_collections.py converted to np.array
     :param gamma: discount factor
@@ -19,7 +19,16 @@ def get_expected_return(paths, gamma, normalize=True):
 
     # Normalize
     g = np.float32(g)
-    if normalize:
-        g -= np.mean(g)
-        g /= np.std(g)
+    if normal:
+        normalize(g)
+        # g -= np.mean(g)
+        # g /= np.std(g)
     return g
+
+
+def normalize(x):
+    """
+    :param x: vector
+    :return: normalized x
+    """
+    return (x - np.mean(x)) / np.std(x)

@@ -21,8 +21,14 @@ class COPOS:
         """
         self.sess = sess
         self.env = env
-        self.obs_dim = self.env.observation_space.shape[0]
+        try:
+            self.obs_dim = self.env.observation_space.shape[0]
+        except:
+            self.obs_dim = self.env.observation_space.n
         self.act_dim = self.env.action_space.n
+
+
+        print(self.act_dim)
         self.render = args.render
         self.env_continuous = False
         self.filename = 'COPOS_log.txt'
@@ -31,7 +37,6 @@ class COPOS:
         # Hyperparameters
         self.gamma = args.gamma
         self.maxiter = args.maxiter
-        self.maxiter = 500
         self.cg_damping = args.cg_damping
         self.batch_size = args.batch_size
         self.min_trans_per_iter = args.min_trans_per_iter
@@ -267,7 +272,7 @@ class COPOS:
             feed_dict[self.eta_ph] = eta
             feed_dict[self.omega_ph] = omega
             dual, dual_grad = self.sess.run([self.dual, self.dual_grad], feed_dict)
-            return dual, np.asarray(dual_grad)
+            return np.asarray(dual), np.asarray(dual_grad)
 
         pg = get_pg()  # vanilla gradient
         if np.allclose(pg, 0):
@@ -283,14 +288,16 @@ class COPOS:
         # Add to feed_dict
         feed_dict[self.flat_comp_w] = w
         feed_dict[self.v] = np.zeros((self.obs_dim, self.act_dim))
-
+        eta = self.eta
+        omega = self.omega
         # Solve constraint optimization of the dual to obtain Lagrange Multipliers eta, omega
-        x0 = np.asarray([self.eta, self.omega])
+        # x0 = np.asarray([self.eta, self.omega])
+        x0 = np.asarray([eta, omega])
         res = scipy.optimize.minimize(get_dual, x0,
                                       method='SLSQP',
                                       jac=True,
-                                      bounds=((1e-12, 1e+10), (1e-12, 1e+10)),
-                                      options={'ftol': 1e-16})
+                                      bounds=((1e-12, 1e+12), (1e-12, 1e+12)),
+                                      options={'ftol': 1e-9})
         eta = res.x[0]
         omega = res.x[1]
 
@@ -301,7 +308,7 @@ class COPOS:
             new_params = np.concatenate((new_theta, new_beta))
             return new_params
 
-        if eta and res.success:
+        if res.success:
             self.eta = eta
             self.omega = omega
             update_params = None
@@ -367,7 +374,7 @@ class COPOS:
         res = scipy.optimize.minimize(get_dual, x0,
                                       method='SLSQP',
                                       jac=True,
-                                      bounds=((eta_lower, eta_upper), (1e-12, 1e+10)),
+                                      bounds=((eta_lower, eta_upper), (1e-12, None)),
                                       options={'ftol': 1e-16})
         eta = res.x[0]
         omega = res.x[1]
@@ -413,9 +420,13 @@ class COPOS:
             # print("Average reward: ", avg_rew)
 
         # Process paths
-        obs = np.concatenate(paths[:, 0]).reshape(-1, self.obs_dim)
-        new_obs = np.concatenate(paths[:, 3]).reshape(-1, self.obs_dim)
-        act = paths[:, 1].reshape(-1,1)
+        if self.obs_dim>1:
+            obs = np.concatenate(paths[:, 0]).reshape(-1, self.obs_dim)
+            new_obs = np.concatenate(paths[:, 3]).reshape(-1, self.obs_dim)
+        else:
+            obs = paths[:, 0].reshape(-1, self.obs_dim)
+            new_obs = paths[:, 3].reshape(-1, self.obs_dim)
+        act = paths[:, 1].reshape(-1, 1)
 
         # Computed expected return, values and advantages
         expected_return = get_expected_return(paths, self.gamma)
@@ -455,7 +466,7 @@ class COPOS:
             prev_dct = dct
 
             # TODO: Log data
-        print(self.eta, self.omega)
+        print("Final eta and omega", self.eta, self.omega)
         self.sess.close()
 
     def print_results(self):
