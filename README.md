@@ -55,6 +55,7 @@ The algorithms implemented are:
 - [Deep Deterministic Policy Gradient](https://arxiv.org/abs/1509.02971)
 - [Trust Region Policy Optimization](https://arxiv.org/abs/1502.05477)
 - [Proximal Policy Optimization](https://arxiv.org/abs/1707.06347)
+- [Proximal Policy Optmization with Intrinsic Curiosity Module (ICM)](https://arxiv.org/abs/1705.05363)
 - [Compatible Natural Policy Gradient](https://arxiv.org/abs/1902.02823)
 
 To be added:
