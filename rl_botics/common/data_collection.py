@@ -1,8 +1,9 @@
 from collections import deque
 import numpy as np
+import gym, gym.spaces
 
 
-def rollout(env, agent, render=False, timestep_limit=1000, partial=False, hist_size=15):
+def rollout(env, agent, render=False, timestep_limit=1000, partial=True, hist_size=25):
     """
         Execute one episode
     """

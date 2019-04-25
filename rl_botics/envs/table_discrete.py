@@ -2,7 +2,7 @@ import numpy as np
 import random
 
 
-class Table():
+class DiscreteTable():
     """
         Table Environment with clean and dirty dishes during Human Robot Collaboration
     """
@@ -166,7 +166,7 @@ class Table():
         self.print()
 
 
-env = Table([5, 5], partial=True, noise=False)
+env = DiscreteTable([5, 5], partial=True, noise=False)
 env.reset()
 env.render()
 ep_rew = 0.0

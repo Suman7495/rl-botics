@@ -1,5 +1,6 @@
 import numpy as np
 import tensorflow as tf
+import scipy.optimize
 
 
 def linesearch1(f, x, fullstep, expected_improve_rate, kl_bound, max_backtracks=10, accept_ratio=.1):
@@ -90,3 +91,26 @@ def jvp(f, x, u, v):
     g = tf.gradients(f, x, grad_ys=v)
     jvp = tf.gradients(g, v, grad_ys=u)
     return jvp
+
+
+def optimize_dual(dual, x0, bounds):
+    """
+        Compute COPOS Discrete dual optimization to return eta and omega
+    :param dual: Dual function which takes as input x = [eta, omega]
+    :param x0: [eta, omega]
+    :param bounds: Limits for eta, omega. e.g. bounds = ((1e-12, 1e+8), (1e-12, 1e+8))
+    :return: res (see scipy.optimize), eta, omega
+    """
+    # res = scipy.optimize.minimize(get_dual, x0,
+    #                               method='SLSQP',
+    #                               jac=True,
+    #                               bounds=((1e-12, 1e+8), (1e-12, 1e+8)),
+    #                               options={'ftol': 1e-12})
+
+    res = scipy.optimize.minimize(dual, x0,
+                                  method='SLSQP',
+                                  jac=True,
+                                  bounds=bounds,
+                                  options={'ftol': 1e-12})
+    return res, res.x[0], res.x[1]
+

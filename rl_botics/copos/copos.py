@@ -157,7 +157,7 @@ class COPOS:
         self.ent_diff = self.entropy - self.old_entropy
 
         # All losses
-        self.losses = [self.surrogate_loss, self.kl, self.ent_diff]
+        self.losses = [self.surrogate_loss, self.kl, self.entropy]
 
         # Compute Gradient Vector Product and Hessian Vector Product
         self.shapes = [list(param.shape) for param in self.params]
@@ -198,7 +198,6 @@ class COPOS:
         # Compatible Weights
         self.flat_comp_w = tf.placeholder(dtype=tf.float32, shape=[self.size_params], name='flat_comp_w')
         comp_w = unflatten_params(self.flat_comp_w, self.shapes)
-        comp_w_theta = comp_w[-1]
 
         # Compatible Value Function Approximation
         # TODO: Verify equation
@@ -207,19 +206,19 @@ class COPOS:
         # Get Jacobian Vector Product (df/dx)u with v as a dummy variable
         jacob_vec_prod = jvp(f=self.policy.act_logits, x=self.params, u=comp_w, v=self.v)
         expected_jvp = tf.reduce_mean(jacob_vec_prod)
-        self.comp_val_fn = jacob_vec_prod -expected_jvp
+        self.comp_val_fn = jacob_vec_prod
 
     def _dual(self):
         """
             Computation of the COPOS dual function
         """
-        self.ent_bound *= self.ent_gain[self.iter]
+        # self.ent_bound *= self.ent_gain[self.iter]
         sum_eta_omega = self.eta_ph + self.omega_ph
-        self.dual = self.eta_ph * self.kl_bound + \
-                    self.omega_ph * (self.ent_bound - self.entropy) + \
-                    sum_eta_omega * \
+        self.dual = self.eta_ph * self.kl_bound + self.omega_ph * (self.ent_bound - self.entropy) + \
+                    sum_eta_omega  * \
                     tf.reduce_sum(tf.reduce_logsumexp((self.eta_ph * self.policy.log_prob + self.comp_val_fn) /
                     sum_eta_omega, axis=1))
+
 
         self.dual_grad = tf.gradients(ys=self.dual, xs=[self.eta_ph, self.omega_ph])
 
@@ -247,32 +246,12 @@ class COPOS:
             Update policy parameters
             :param feed_dict: Dictionary to feed into tensorflow graph
         """
-        # Get previous parameters
-        prev_params = self.get_flat_params()
-        theta_old = prev_params[0:self.policy.theta_len]
-        beta_old = prev_params[self.policy.theta_len:]
-
         def get_pg():
             return self.sess.run(self.pg, feed_dict)
 
         def get_hvp(p):
             feed_dict[self.flat_tangents] = p
             return self.sess.run(self.hvp, feed_dict) + self.cg_damping * p
-
-        def get_loss(params):
-            self.set_flat_params(params)
-            return self.sess.run(self.losses, feed_dict)
-
-        def get_dual(x):
-            eta, omega = x
-            error_return_val = 1e6, np.array([0., 0.])
-            if (eta + omega < 0) or (eta == 0):
-                print("Error in dual optimization! Got eta: ", eta)
-                return error_return_val
-            feed_dict[self.eta_ph] = eta
-            feed_dict[self.omega_ph] = omega
-            dual, dual_grad = self.sess.run([self.dual, self.dual_grad], feed_dict)
-            return np.asarray(dual), np.asarray(dual_grad)
 
         pg = get_pg()  # vanilla gradient
         if np.allclose(pg, 0):
@@ -281,6 +260,59 @@ class COPOS:
 
         # Obtain Compatible Weights w by Conjugate Gradient (alternative: minimise MSE which is more inefficient)
         w = cg(f_Ax=get_hvp, b=-pg)
+        self.copos_update(w, feed_dict)
+
+    def copos_update(self, w, feed_dict):
+        """
+        :param w: Weights
+        :param feed_dict: Dictionary for TensorFlow
+        """
+        def get_loss(params):
+            self.set_flat_params(params)
+            return self.sess.run(self.losses, feed_dict)
+
+        def get_mean_loss(params):
+            self.set_flat_params(params)
+            surr, kl, ent = self.sess.run(self.losses, feed_dict)
+            return np.mean(surr), np.mean(kl), np.mean(ent)
+
+        def get_dual(x):
+            eta, omega = x
+            error_return_val = 1e6, np.array([0., 0.])
+            if (eta + omega < 0) or (eta == 0) or np.isnan(eta):
+                print("Error in dual optimization! Got eta: ", eta)
+                return error_return_val
+            feed_dict[self.eta_ph] = eta
+            feed_dict[self.omega_ph] = omega
+            dual, dual_grad, comp_val_fn = self.sess.run([self.dual, self.dual_grad, self.comp_val_fn], feed_dict)
+            # print("Eta", eta, "Omega", omega, "Dual: ", dual, "Grad: ", dual_grad)
+            return np.asarray(dual), np.asarray(dual_grad)
+
+        def get_new_params():
+            """ Return new parameters """
+            new_theta = (eta * theta_old + w_theta) / (eta + omega)
+            new_beta = beta_old + w_beta / eta
+            new_theta_beta = np.concatenate((new_theta, new_beta))
+            return new_theta_beta
+
+        def check_constraints(n_params):
+            """
+            :param n_params: New parameters
+            :return: Returns True if constraints are satisfied, otherwise False
+            """
+            sur_before, kl_before, ent_before = get_mean_loss(prev_params)
+            sur, kl, ent = get_mean_loss(n_params)
+            improve = sur - sur_before
+            if kl < self.kl_bound * 1.5:
+                if improve < 0:
+                    return True
+            return False
+
+        # Get previous parameters
+        prev_params = self.get_flat_params()
+        theta_old = prev_params[0:self.policy.theta_len]
+        beta_old = prev_params[self.policy.theta_len:]
+
         # Split compatible weights w in w_theta and w_beta
         w_theta = w[0:self.policy.theta_len]
         w_beta = w[self.policy.theta_len:]
@@ -288,66 +320,47 @@ class COPOS:
         # Add to feed_dict
         feed_dict[self.flat_comp_w] = w
         feed_dict[self.v] = np.zeros((self.obs_dim, self.act_dim))
-        eta = self.eta
-        omega = self.omega
+
         # Solve constraint optimization of the dual to obtain Lagrange Multipliers eta, omega
-        # x0 = np.asarray([self.eta, self.omega])
-        x0 = np.asarray([eta, omega])
-        res = scipy.optimize.minimize(get_dual, x0,
-                                      method='SLSQP',
-                                      jac=True,
-                                      bounds=((1e-12, 1e+12), (1e-12, 1e+12)),
-                                      options={'ftol': 1e-9})
-        eta = res.x[0]
-        omega = res.x[1]
+        # Optimization 1
+        x0 = np.asarray([self.eta, self.omega])
+        bounds = ((1e-12, None), (1e-12, None))
+        res, eta, omega = optimize_dual(get_dual, x0, bounds)
 
-        def get_new_params():
-            """ Return new parameters """
-            new_theta = (eta * theta_old + w_theta) / (eta + omega)
-            new_beta = beta_old + w_beta / eta
-            new_params = np.concatenate((new_theta, new_beta))
-            return new_params
-
-        if res.success:
-            self.eta = eta
-            self.omega = omega
-            update_params = None
-
-            surr, _, _ = get_loss(prev_params)
-            surr_before = np.mean(surr)
-            sur, kl, _ = get_loss(get_new_params())
-            mean_surr = np.mean(sur)
-            improve = mean_surr - surr_before
-            mean_kl = np.mean(kl)
-            if mean_kl < self.kl_bound * 1.5:
-                if improve < 0:
-                    update_params = get_new_params()
-                    self.set_flat_params(update_params)
+        if res.success and not np.isnan(eta):
+            params1 = None
+            new_params = get_new_params()
+            if check_constraints(new_params):
+                self.eta = eta
+                self.omega = omega
+                params1 = new_params
+                self.set_flat_params(params1)
         else:
             print("Failed: Iteration %d. Cause: Optimization 1." %(self.iter))
             print(res.message)
             self.set_flat_params(prev_params)
             return
 
-        # Rescale Eta keeping Omega fixed with Binary Search
+        # Optimization 2 (Binary search)
+        # Optimize eta only
         surr, _, _ = get_loss(prev_params)
         surr_before = np.mean(surr)
         min_gain = 0.1
         max_gain = 10
 
         gain = max_gain
-        best_params = None
+        params2 = None
         for _ in range(50):
             new_params = get_new_params()
-            sur, kl, ent_diff = get_loss(new_params)
+            check_constraints(new_params)
+            sur, kl, ent = get_loss(new_params)
             mean_surr = np.mean(sur)
             mean_kl = np.mean(kl)
-            mean_ent_diff = np.mean(ent_diff)
             improve = mean_surr - surr_before
             if mean_kl < self.kl_bound * 1.5:
                 if improve < 0:
                     self.eta = eta
-                    best_params = new_params
+                    params2 = new_params
                 max_gain = gain
             else:
                 min_gain = gain
@@ -356,39 +369,48 @@ class COPOS:
             eta *= gain
             gain = 0.5 * (min_gain + max_gain)
 
-        if best_params is not None:
-            self.set_flat_params(best_params)
-        elif update_params is not None:
+        if params2 is not None:
+            self.set_flat_params(params2)
+        elif params1 is not None:
             print("Failed: Iteration %d. Cause: Binary Search. Updating approximate" % (self.iter))
-            self.set_flat_params(update_params)
+            self.set_flat_params(params1)
             return
         else:
-            print("Failed: Iteration %d. Cause: Binary Search.Updating previous" % (self.iter))
+            print("Failed: Iteration %d. Cause: Binary Search. Updating previous" % (self.iter))
             self.set_flat_params(prev_params)
             return
 
-        # Optimize Omega now with very slight variations in eta
+        # Optimize 3
+        # Optimize omega only
         x0 = np.asarray([self.eta, self.omega])
         eta_lower = np.max([self.eta - 1e-3, 1e-12])
-        eta_upper = self.eta + 1e-3
-        res = scipy.optimize.minimize(get_dual, x0,
-                                      method='SLSQP',
-                                      jac=True,
-                                      bounds=((eta_lower, eta_upper), (1e-12, None)),
-                                      options={'ftol': 1e-16})
-        eta = res.x[0]
-        omega = res.x[1]
+        bounds = ((eta_lower, self.eta + 1e-3), (1e-12, None))
+        res, eta, omega = optimize_dual(get_dual, x0, bounds)
 
-        if eta and res.success:
-            print("Iter %d completed successfully with %f." % (self.iter, self.avg_rew))
-            self.eta = eta
-            self.omega = omega
-            new_params = get_new_params()
-            self.set_flat_params(new_params)
+        if res.success and not np.isnan(eta):
+            params3 = get_new_params()
+            if check_constraints(params3):
+                self.eta = eta
+                self.omega = omega
+                self.set_flat_params(params3)   # Params from Optimization 3 (Dual solution)
+            elif params2 is not None:
+                self.set_flat_params(params2)   # Params from Optimization 2 (binary search)
+            else:
+                self.set_flat_params(params1)   # Params from Optimization 1 (Dual solution)
+
+            kl, sur, ent = get_mean_loss(params3)
+
+            # Print Results
+            print("\n---------Iter %d---------- \n"
+                  "Avg Reward: %f             \n"
+                  "KL:         %f             \n"
+                  "Entropy:    %f             \n"
+                  "Eta:        %f             \n"
+                  "Omega:      %f             \n"
+                  "--------------------------" % (self.iter, self.avg_rew, kl, ent, self.eta, self.omega))
         else:
             print("Failed: Iteration %d. Cause: Optimization 2." % (self.iter))
             print(res.message)
-
             self.set_flat_params(prev_params)
 
     def update_value(self, prev_feed_dict):

@@ -34,8 +34,8 @@ lambda_trace        = 0.95       # coefficient for generalized advantage
 fwd_sizes       = [64, 64]
 fwd_activations = ['relu', 'relu']
 fwd_layer_types = ['dense', 'dense']
-n_ic_epochs = 20
-
+n_ic_epochs     = 20
+curiosity_gain  = 1
 
 # """
 #     Default hyperparameters Rock-v0

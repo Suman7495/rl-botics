@@ -36,16 +36,16 @@
 env_name           = 'Rock-v0'
 render             = True
 gamma              = 0.99       # discount factor
-maxiter            = 3000      # number of learning iterations
-min_trans_per_iter = 1024       # minimum number of transition steps per iteration (if an episode ends before min_trans_per_iter is reached, a new one starts)
+maxiter            = 600      # number of learning iterations
+min_trans_per_iter = 5000       # minimum number of transition steps per iteration (if an episode ends before min_trans_per_iter is reached, a new one starts)
 
 # TRPO specific hyperparameters
-kl_bound           = 0.001
-ent_bound          = 0.0005
+kl_bound           = 0.01
+ent_bound          = 0.01
 cg_damping         = 1e-1       # conjugate gradient damping (for the diagonal entries)
 
 # Policy network parameters
-pi_sizes           = [64, 64]
+pi_sizes           = [32, 32]
 pi_activations     = ['tanh', 'tanh']
 pi_layer_types     = ['dense', 'dense']
 pi_lr              = 1e-4

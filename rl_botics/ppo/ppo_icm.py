@@ -67,7 +67,7 @@ class PPOICM:
         self.fwd_activations = h.fwd_activations + [None]
         self.fwd_layer_types = h.fwd_layer_types + ['dense']
         self.n_ic_epochs = h.n_ic_epochs
-        self.ic_eta = 0.2
+        self.curiosity_gain = h.curiosity_gain
 
         # Build Tensorflow graph
         self._build_graph()
@@ -152,7 +152,7 @@ class PPOICM:
         self.fwd_train_step = tf.train.AdamOptimizer(learning_rate=0.001).minimize(self.fwd_loss)
 
         # Curiosity Reward
-        self.curiosity = self.ic_eta * 0.5 * tf.reduce_mean(tf.square(self.fwd_model.output - self.new_obs), axis=1)
+        self.curiosity = self.curiosity_gain * 0.5 * tf.reduce_mean(tf.square(self.fwd_model.output - self.new_obs), axis=1)
 
     def _loss(self):
         """
@@ -272,7 +272,7 @@ class PPOICM:
         curiosity = normalize(curiosity.reshape(-1, 1))
         print("Average reward: ", avg_rew, "        Mean Curiosity: ", np.mean(curiosity))
 
-        # adv = normalize(adv + curiosity)
+        adv = normalize(adv + curiosity)
         # Log Data
 
         # Generate feed_dict with data

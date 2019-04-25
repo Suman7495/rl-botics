@@ -27,12 +27,13 @@ def main():
     """
     args = argparser()
     # env = gym.make(args.env)
-    env = HistoryEnv("Rock-v0", history_type='mixed_full_pomdp')
+    env = HistoryEnv("Rock-v0", hist_len=15, history_type='field_vision')
     with tf.Session() as sess:
         agent = COPOS(args, sess, env)
         print("Training agent...\n")
         agent.train()
         agent.print_results()
+
 
 if __name__ == '__main__':
     main()
