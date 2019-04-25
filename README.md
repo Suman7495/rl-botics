@@ -68,6 +68,7 @@ To be added:
 - [Relative Entropy Search](http://jmlr.org/papers/v18/16-142.html)
 - [Soft Actor Critic](https://arxiv.org/abs/1801.01290)
 - [A3C](https://arxiv.org/abs/1602.01783)
+- [HER](https://arxiv.org/abs/1707.01495)
 
 ## Toolbox Structure
 All the algorithms are in the `rl_botics` directory. Each algorithm specified above has an individual directory.
