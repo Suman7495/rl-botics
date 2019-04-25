@@ -23,7 +23,6 @@ setup(
             'tensorflow_probability',
             'pandas',
             'keras',
-            'matplotlib',
-            'collections'
+            'matplotlib'
     ]
 )
