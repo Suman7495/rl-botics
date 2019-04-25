@@ -3,8 +3,8 @@ RL-botics is a toolbox with highly optimized implementations of Deep Reinforceme
 
 The objective was to have modular, clean and easy to read codebase so that the research community may build on top with ease. The implementations can be integrated with [OpenAI Gym](https://github.com/openai/gym) environments. The majority of the algorithms are Policy Search Methods as the toolbox is targetted for robotic applications.
 
-## Prerequisites
-RL-botics requires:
+## Requirements
+Requirements:
 - [python3 (>=3.5)](https://www.python.org/downloads/)
 - [Scipy](https://www.scipy.org/)
 - [Numpy](http://www.numpy.org/)
@@ -13,8 +13,6 @@ RL-botics requires:
 - [TensorFlow](https://www.tensorflow.org/)
 - [TensorFlow Probability](https://www.tensorflow.org/probability)
 - [Keras](https://keras.io/)
-
-It is strongly suggested to also have:
 - [OpenAI Gym](https://github.com/openai/gym)
 
 ### Conda Environment
