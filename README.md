@@ -50,6 +50,9 @@ For example, to run TRPO:
 cd rl_botics/trpo/
 python main.py
 ```
+
+Numerous other options can be added too, but it is recommended to modify the hyerperparameters in `hyperparameters.py`.
+
 ### Algorithms
 The algorithms implemented are:
 - [Q-Learning](https://link.springer.com/article/10.1007/BF00992698)
