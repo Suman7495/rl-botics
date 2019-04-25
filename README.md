@@ -34,6 +34,7 @@ To install the package, we recommend cloning the original package:
 ```
 git clone https://github.com/Suman7495/rl-botics.git
 cd rl-botics
+pip install -e .
 ```
 
 ## Usage
