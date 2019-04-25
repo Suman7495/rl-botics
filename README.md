@@ -27,6 +27,10 @@ To activate the environment:
 ```
 source activate RL
 ```
+To deactivate the environment:
+```
+source deactivate
+```
 ## Installation
 To install the package, we recommend cloning the original package:
 ```
