@@ -20,7 +20,7 @@ setup(
             'numpy',
             'scipy',
             'tensorflow',
-            'tensorflow_tfp',
+            'tensorflow_probability',
             'pandas',
             'keras',
             'matplotlib',
