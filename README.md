@@ -70,6 +70,11 @@ To be added:
 - [A3C](https://arxiv.org/abs/1602.01783)
 - [HER](https://arxiv.org/abs/1707.01495)
 
+## Environments
+All environments are in the `envs` directory. The environments available currently are:
+- Field Vision Rock Sampling (FVRS): A POMDP environment where the agent has to collect good rocks from partial observability.
+- Table Continuous: A POMDP environment emulation Human Robot Collaboration. The objective of the robot is to remove dirty dishes from the table without colliding with the human.
+
 ## Toolbox Structure
 All the algorithms are in the `rl_botics` directory. Each algorithm specified above has an individual directory.
 
