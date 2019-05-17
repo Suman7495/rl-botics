@@ -47,8 +47,8 @@ class MlpSoftmaxPolicy(MLP):
 
     def get_entropy(self, obs):
         feed_dict = {self.obs: obs}
-        entropy = self.sess.run(self.entropy, feed_dict=feed_dict)
-        return entropy
+        mean_entropy = self.sess.run(self.entropy, feed_dict=feed_dict)
+        return mean_entropy
 
     def get_old_act_logits(self, obs):
         feed_dict = {self.obs: obs}
@@ -71,6 +71,8 @@ class ParametrizedSoftmaxPolicy(MlpSoftmaxPolicy):
 
             # Utilities
             self.log_prob = tf.expand_dims(self.act_dist.log_prob(tf.squeeze(self.act, axis=-1)), axis=-1)
+            self.actions = tf.placeholder(dtype=tf.float32, shape=[None, sizes[-1]])
+            self.all_log_probs = tf.nn.log_softmax(self.act_logits)
             self.entropy = tf.reduce_mean(self.act_dist.entropy())
 
         self.theta = tf.trainable_variables(scope=scope)
@@ -78,6 +80,11 @@ class ParametrizedSoftmaxPolicy(MlpSoftmaxPolicy):
 
         # Variable Lengths
         self.theta_len = sizes[-2] * sizes[-1]
+
+    def get_action_log_probs(self, obs, act_dim):
+        feed_dict = {self.obs: obs}
+        action_probs = self.sess.run(self.all_log_probs, feed_dict)
+        return action_probs
 
 
 class RandPolicy:

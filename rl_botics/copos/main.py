@@ -5,6 +5,7 @@ import hyperparameters as h
 import gym, gym.spaces
 import rl_botics.env.gym_pomdp
 from rl_botics.envs.fvrs import *
+from rl_botics.envs.table_continuous import *
 
 def argparser():
     parser = argparse.ArgumentParser()
@@ -27,7 +28,8 @@ def main():
     """
     args = argparser()
     # env = gym.make(args.env)
-    env = HistoryEnv("Rock-v0", hist_len=15, history_type='field_vision')
+    # env = HistoryEnv("Rock-v0", hist_len=15, history_type='field_vision_pos')
+    env = ContinuousTable()
     with tf.Session() as sess:
         agent = COPOS(args, sess, env)
         print("Training agent...\n")

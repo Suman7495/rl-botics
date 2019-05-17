@@ -93,7 +93,7 @@ def jvp(f, x, u, v):
     return jvp
 
 
-def optimize_dual(dual, x0, bounds):
+def optimize_dual(dual, x0, bounds, ftol=1e-12):
     """
         Compute COPOS Discrete dual optimization to return eta and omega
     :param dual: Dual function which takes as input x = [eta, omega]
@@ -101,16 +101,11 @@ def optimize_dual(dual, x0, bounds):
     :param bounds: Limits for eta, omega. e.g. bounds = ((1e-12, 1e+8), (1e-12, 1e+8))
     :return: res (see scipy.optimize), eta, omega
     """
-    # res = scipy.optimize.minimize(get_dual, x0,
-    #                               method='SLSQP',
-    #                               jac=True,
-    #                               bounds=((1e-12, 1e+8), (1e-12, 1e+8)),
-    #                               options={'ftol': 1e-12})
-
     res = scipy.optimize.minimize(dual, x0,
                                   method='SLSQP',
                                   jac=True,
                                   bounds=bounds,
-                                  options={'ftol': 1e-12})
+                                  options={'ftol': ftol})
     return res, res.x[0], res.x[1]
+
 

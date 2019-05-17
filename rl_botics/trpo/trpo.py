@@ -94,6 +94,8 @@ class TRPO:
                                        )
         print("\nPolicy model: ")
         print(self.policy.print_model_summary())
+        self.old_policy = tfp.distributions.Categorical(self.old_act_logits)
+
 
     def _build_value_function(self):
         """
@@ -119,6 +121,7 @@ class TRPO:
         """
         # Log probabilities of new and old actions
         prob_ratio = tf.exp(self.policy.log_prob - self.old_log_probs)
+        # prob_ratio = tf.exp(self.policy.log_prob - self.old_policy.log_prob(self.act))
 
         # Policy parameters
         self.params = self.policy.vars
@@ -128,9 +131,9 @@ class TRPO:
         self.pg = flatgrad(self.surrogate_loss, self.params)
 
         # KL divergence, entropy, surrogate loss
-        self.old_policy = tfp.distributions.Categorical(self.old_act_logits)
-        # self.kl = self.old_policy.kl_divergence(self.policy.act_dist)
-        self.kl = self.policy.act_dist.kl_divergence(self.old_policy)
+        # self.old_policy = tfp.distributions.Categorical(self.old_act_logits)
+        self.kl = self.old_policy.kl_divergence(self.policy.act_dist)
+
         # Entropy
         self.entropy = self.policy.entropy
 
@@ -228,6 +231,8 @@ class TRPO:
             new_params = prev_params + fullstep * step_size
             surr_loss, kl, ent = get_loss(new_params)
             mean_kl = np.mean(kl)
+            if mean_kl < 0:
+                print(mean_kl)
             surr_loss = np.mean(surr_loss)
             improve = surr_loss - surr_before
             expected_improve = expected_improve_rate * step_size

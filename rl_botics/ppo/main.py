@@ -6,6 +6,8 @@ import tensorflow as tf
 import hyperparameters as h
 import rl_botics
 import rl_botics.env.gym_pomdp
+from rl_botics.envs.table_continuous import *
+
 
 def argparser():
     parser = argparse.ArgumentParser()
@@ -27,8 +29,9 @@ def main():
     """
     args = argparser()
     env = gym.make(args.env)
+    env = ContinuousTable()
     with tf.Session() as sess:
-        agent = PPOICM(args, sess, env)
+        agent = PPO(args, sess, env)
         print("Training agent...\n")
         agent.train()
         agent.print_results()

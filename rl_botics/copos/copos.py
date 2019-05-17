@@ -12,7 +12,7 @@ from rl_botics.common.utils import *
 from rl_botics.common.plotter import *
 import hyperparameters as h
 from utils import *
-
+from pprint import pprint
 
 class COPOS:
     def __init__(self, args, sess, env):
@@ -33,6 +33,9 @@ class COPOS:
         self.env_continuous = False
         self.filename = 'COPOS_log.txt'
         open('/tmp/rl_log.txt', 'w').close()
+        open('/tmp/rl_success.txt', 'w').close()
+        open('/tmp/rl_ent.txt', 'w').close()
+
 
         # Hyperparameters
         self.gamma = args.gamma
@@ -42,6 +45,7 @@ class COPOS:
         self.min_trans_per_iter = args.min_trans_per_iter
         self.iter = 1
         self.ent_gain = np.linspace(1, 10, self.maxiter+1)
+
         # Constraints parameters
         self.kl_bound = args.kl_bound
         self.ent_bound = args.ent_bound
@@ -88,6 +92,7 @@ class COPOS:
         # Policy old log prob and action logits (ouput of neural net)
         self.old_log_probs = tf.placeholder(dtype=tf.float32, shape=[None, 1], name='old_log_probs')
         self.old_act_logits = tf.placeholder(dtype=tf.float32, shape=[None, self.act_dim], name='old_act_logits')
+        self.act_log_probs = tf.placeholder(dtype=tf.float32, shape=[None, None], name='old_log_probs')
 
         # Target for value function.
         self.v_targ = tf.placeholder(dtype=tf.float32, shape=[None, 1], name='target_values')
@@ -97,6 +102,8 @@ class COPOS:
         # beta: neural network nonlinear parameters
         self.eta_ph = tf.placeholder(dtype=tf.float32, shape=[], name="eta_ph")
         self.omega_ph = tf.placeholder(dtype=tf.float32, shape=[], name="omega_ph")
+        self.batch_size_ph = tf.placeholder(dtype=tf.float32, shape=[], name='batch_size_ph')
+        self.mean_entropy_ph = tf.placeholder(dtype=tf.float32, shape=[], name='mean_entropy')
 
     def _build_policy(self):
         """
@@ -149,8 +156,7 @@ class COPOS:
         # KL divergence
         self.old_policy = tfp.distributions.Categorical(self.old_act_logits)
         self.kl = self.old_policy.kl_divergence(self.policy.act_dist)
-        # self.kl = self.policy.act_dist.kl_divergence(self.old_policy)
-
+        self.m_kl = tf.reduce_mean(self.kl)
         # Entropy
         self.entropy = self.policy.entropy
         self.old_entropy = self.old_policy.entropy()
@@ -169,7 +175,8 @@ class COPOS:
         self._dual()
 
         # Compute gradients of KL wrt policy parameters
-        grads = tf.gradients(self.kl, self.params)
+        # grads = tf.gradients(self.kl, self.params)
+        grads = tf.gradients(self.m_kl, self.params)
         tangents = unflatten_params(self.flat_tangents, self.shapes)
 
         # Gradient Vector Product
@@ -200,13 +207,12 @@ class COPOS:
         comp_w = unflatten_params(self.flat_comp_w, self.shapes)
 
         # Compatible Value Function Approximation
-        # TODO: Verify equation
         self.v = tf.placeholder(tf.float32, shape=self.policy.act_logits.get_shape())
 
         # Get Jacobian Vector Product (df/dx)u with v as a dummy variable
         jacob_vec_prod = jvp(f=self.policy.act_logits, x=self.params, u=comp_w, v=self.v)
         expected_jvp = tf.reduce_mean(jacob_vec_prod)
-        self.comp_val_fn = jacob_vec_prod
+        self.comp_val_fn = tf.squeeze(jacob_vec_prod) - expected_jvp
 
     def _dual(self):
         """
@@ -214,12 +220,12 @@ class COPOS:
         """
         # self.ent_bound *= self.ent_gain[self.iter]
         sum_eta_omega = self.eta_ph + self.omega_ph
-        self.dual = self.eta_ph * self.kl_bound + self.omega_ph * (self.ent_bound - self.entropy) + \
-                    sum_eta_omega  * \
-                    tf.reduce_sum(tf.reduce_logsumexp((self.eta_ph * self.policy.log_prob + self.comp_val_fn) /
+        inv_batch_size = 1 / self.batch_size_ph
+        # inv_batch_size = 1
+        self.dual = self.eta_ph * self.kl_bound + self.omega_ph * (self.ent_bound - self.mean_entropy_ph) + \
+                    sum_eta_omega  * inv_batch_size * \
+                    tf.reduce_sum(tf.reduce_logsumexp((self.eta_ph * self.act_log_probs + self.comp_val_fn) /
                     sum_eta_omega, axis=1))
-
-
         self.dual_grad = tf.gradients(ys=self.dual, xs=[self.eta_ph, self.omega_ph])
 
     def _init_session(self):
@@ -260,17 +266,63 @@ class COPOS:
 
         # Obtain Compatible Weights w by Conjugate Gradient (alternative: minimise MSE which is more inefficient)
         w = cg(f_Ax=get_hvp, b=-pg)
+        # self.trpo_update(w, feed_dict)
         self.copos_update(w, feed_dict)
+
+    def trpo_update(self, stepdir, feed_dict):
+        def get_pg():
+            return self.sess.run(self.pg, feed_dict)
+
+        def get_hvp(p):
+            feed_dict[self.flat_tangents] = p
+            return self.sess.run(self.hvp, feed_dict) + self.cg_damping * p
+
+        def get_loss(params):
+            self.set_flat_params(params)
+            return self.sess.run(self.losses, feed_dict)
+        pg = get_pg()
+        prev_params = self.get_flat_params()
+        loss_before = get_loss(prev_params)
+        surr_before = np.mean(loss_before[0])
+
+        step_size = 1.0
+        shs = 0.5 * stepdir.dot(get_hvp(stepdir))
+        lm = np.sqrt(shs / self.kl_bound)
+        fullstep = stepdir / lm
+        expected_improve_rate = -pg.dot(stepdir) / lm
+
+        # Perform Linesearch to rescale update stepsize
+        for itr in range(20):
+            new_params = prev_params + fullstep * step_size
+            surr_loss, kl, ent = get_loss(new_params)
+            mean_kl = np.mean(kl)
+            surr_loss = np.mean(surr_loss)
+            improve = surr_loss - surr_before
+            expected_improve = expected_improve_rate * step_size
+            ratio = improve / expected_improve
+            if mean_kl > self.kl_bound * 1.5:
+                print("KL bound exceeded.")
+            elif improve > 0:
+                print("Surrogate Loss didn't improve")
+            else:
+                # Print Results
+                print("\n---------Iter %d---------- \n"
+                      "Avg Reward: %f             \n"
+                      "SurrogateL  %f             \n"
+                      "KL:         %f             \n"
+                      "Entropy:    %f             \n"
+                      "--------------------------" % (self.iter, self.avg_rew, surr_loss, mean_kl, np.mean(ent)))
+                break
+            step_size *= .5
+        else:
+            print("Failed to update. Keeping old parameters")
+            self.set_flat_params(prev_params)
 
     def copos_update(self, w, feed_dict):
         """
         :param w: Weights
         :param feed_dict: Dictionary for TensorFlow
         """
-        def get_loss(params):
-            self.set_flat_params(params)
-            return self.sess.run(self.losses, feed_dict)
-
         def get_mean_loss(params):
             self.set_flat_params(params)
             surr, kl, ent = self.sess.run(self.losses, feed_dict)
@@ -285,7 +337,6 @@ class COPOS:
             feed_dict[self.eta_ph] = eta
             feed_dict[self.omega_ph] = omega
             dual, dual_grad, comp_val_fn = self.sess.run([self.dual, self.dual_grad, self.comp_val_fn], feed_dict)
-            # print("Eta", eta, "Omega", omega, "Dual: ", dual, "Grad: ", dual_grad)
             return np.asarray(dual), np.asarray(dual_grad)
 
         def get_new_params():
@@ -303,7 +354,8 @@ class COPOS:
             sur_before, kl_before, ent_before = get_mean_loss(prev_params)
             sur, kl, ent = get_mean_loss(n_params)
             improve = sur - sur_before
-            if kl < self.kl_bound * 1.5:
+
+            if 0 <= kl < self.kl_bound:
                 if improve < 0:
                     return True
             return False
@@ -323,7 +375,7 @@ class COPOS:
 
         # Solve constraint optimization of the dual to obtain Lagrange Multipliers eta, omega
         # Optimization 1
-        x0 = np.asarray([self.eta, self.omega])
+        x0 = np.asarray([1, 0.5])
         bounds = ((1e-12, None), (1e-12, None))
         res, eta, omega = optimize_dual(get_dual, x0, bounds)
 
@@ -343,22 +395,26 @@ class COPOS:
 
         # Optimization 2 (Binary search)
         # Optimize eta only
-        surr, _, _ = get_loss(prev_params)
-        surr_before = np.mean(surr)
+        surr_before, _, _ = get_mean_loss(prev_params)
         min_gain = 0.1
         max_gain = 10
-
-        gain = max_gain
+        gain = 0.5 * (max_gain + min_gain)
+        # gain = max_gain
         params2 = None
-        for _ in range(50):
-            new_params = get_new_params()
-            check_constraints(new_params)
-            sur, kl, ent = get_loss(new_params)
-            mean_surr = np.mean(sur)
-            mean_kl = np.mean(kl)
-            improve = mean_surr - surr_before
-            if mean_kl < self.kl_bound * 1.5:
+        for _ in range(15):
+            # print(gain)
+            cur_eta = gain * eta
+            cur_theta = (cur_eta * theta_old + w_theta) / (cur_eta + omega)
+            cur_beta = beta_old + w_beta / cur_eta
+            new_params = np.concatenate([cur_theta, cur_beta])
+            surr, kl, ent = get_mean_loss(new_params)
+            # print(kl)
+            improve = surr - surr_before
+            if 0 <= kl < self.kl_bound:
+                # print("KL success")
                 if improve < 0:
+                    # print("Binary success")
+                    eta = cur_eta
                     self.eta = eta
                     params2 = new_params
                 max_gain = gain
@@ -366,18 +422,19 @@ class COPOS:
                 min_gain = gain
 
             # Update eta then gain
-            eta *= gain
             gain = 0.5 * (min_gain + max_gain)
 
         if params2 is not None:
+            # print("Binary ")
             self.set_flat_params(params2)
         elif params1 is not None:
             print("Failed: Iteration %d. Cause: Binary Search. Updating approximate" % (self.iter))
             self.set_flat_params(params1)
             return
         else:
-            print("Failed: Iteration %d. Cause: Binary Search. Updating previous" % (self.iter))
-            self.set_flat_params(prev_params)
+            print("Failed: Iteration %d. Cause: Binary Search. Performing TRPO update." % (self.iter))
+            # self.set_flat_params(prev_params)
+            self.trpo_update(w, feed_dict)
             return
 
         # Optimize 3
@@ -385,29 +442,38 @@ class COPOS:
         x0 = np.asarray([self.eta, self.omega])
         eta_lower = np.max([self.eta - 1e-3, 1e-12])
         bounds = ((eta_lower, self.eta + 1e-3), (1e-12, None))
-        res, eta, omega = optimize_dual(get_dual, x0, bounds)
+        res, eta, omega = optimize_dual(get_dual, x0, bounds, 1e-16)
 
         if res.success and not np.isnan(eta):
             params3 = get_new_params()
             if check_constraints(params3):
                 self.eta = eta
                 self.omega = omega
-                self.set_flat_params(params3)   # Params from Optimization 3 (Dual solution)
+                print("Updating params 3")
+                update_params = params3
             elif params2 is not None:
-                self.set_flat_params(params2)   # Params from Optimization 2 (binary search)
+                print("Updating params 2")
+                update_params = params2
             else:
-                self.set_flat_params(params1)   # Params from Optimization 1 (Dual solution)
+                print("Updating params 1")
+                update_params = params1
 
-            kl, sur, ent = get_mean_loss(params3)
+            surr, kl, ent = get_mean_loss(update_params)
+            self.set_flat_params(update_params)
 
             # Print Results
             print("\n---------Iter %d---------- \n"
                   "Avg Reward: %f             \n"
+                  "SurrogateL  %f             \n"
                   "KL:         %f             \n"
                   "Entropy:    %f             \n"
                   "Eta:        %f             \n"
-                  "Omega:      %f             \n"
-                  "--------------------------" % (self.iter, self.avg_rew, kl, ent, self.eta, self.omega))
+                  "Omega:      %f             \n" 
+                  "--------------------------" % (self.iter, self.avg_rew, surr, kl, ent, self.eta, self.omega))
+            filename = '/tmp/rl_ent.txt'
+            with open(filename, 'a') as f:
+                f.write("\n%d" % (ent))
+
         else:
             print("Failed: Iteration %d. Cause: Optimization 2." % (self.iter))
             print(res.message)
@@ -426,20 +492,22 @@ class COPOS:
     def process_paths(self, paths):
         """
             Process data
-
             :param paths: Obtain unprocessed data from training
             :return: feed_dict: Dict required for neural network training
         """
         paths = np.asarray(paths)
 
         # Average episode reward for iteration
-        tot_rew = np.sum(paths[:,2])
-        ep_count = np.sum(paths[:,-1])
-        self.avg_rew = tot_rew / ep_count
+        tot_rew = np.sum(paths[:, 2])
+        ep_count = np.sum(paths[:, -1])
+        if ep_count:
+            self.avg_rew = tot_rew / ep_count
+        else:
+            self.avg_rew = -100
         filename = '/tmp/rl_log.txt'
         with open(filename, 'a') as f:
             f.write("\n%d" % (self.avg_rew))
-            # print("Average reward: ", avg_rew)
+            # print("Average reward: ", self.avg_rew)
 
         # Process paths
         if self.obs_dim>1:
@@ -455,13 +523,22 @@ class COPOS:
         values = self.value.predict(obs)
         adv = expected_return-values
 
+        # Get action log probs
+        action_log_probs = self.policy.get_action_log_probs(obs, self.act_dim)
+
+        # Batch entropy
+        mean_ent = self.policy.get_entropy(obs)
+
         # Generate feed_dict with data
         feed_dict = {self.obs: obs,
                      self.act: act,
                      self.adv: adv,
                      self.old_log_probs: self.policy.get_log_prob(obs, act),
                      self.old_act_logits: self.policy.get_old_act_logits(obs),
-                     self.policy.act: act}
+                     self.policy.act: act,
+                     self.batch_size_ph: paths.shape[0],
+                     self.mean_entropy_ph: mean_ent,
+                     self.act_log_probs: action_log_probs}
         return feed_dict
 
     def train(self):
@@ -496,5 +573,8 @@ class COPOS:
             Plot the results
         """
         # TODO: Finish this section
-        plot("COPOS")
+        plot("COPOS", '/tmp/rl_log.txt', 'Iterations', 'Average Reward')
+        plot("Success", '/tmp/rl_success.txt', 'Iterations', 'Success Percentage')
+        plot('Entropy', '/tmp/rl_ent.txt', 'Iterations', 'Mean Entropy')
         return
+

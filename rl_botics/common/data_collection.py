@@ -3,7 +3,7 @@ import numpy as np
 import gym, gym.spaces
 
 
-def rollout(env, agent, render=False, timestep_limit=1000, partial=True, hist_size=25):
+def rollout(env, agent, render=False, timestep_limit=1000, partial=False, hist_size=25):
     """
         Execute one episode
     """
@@ -18,22 +18,22 @@ def rollout(env, agent, render=False, timestep_limit=1000, partial=True, hist_si
         if render:
             env.render()
         if partial:
-            input = np.asarray(history).reshape(-1, obs.shape[0])
-            action = agent.pick_action(input)[-1]
+            obs = np.asarray(history).reshape(1, -1)
+            action = agent.pick_action(obs)
         else:
             action = agent.pick_action(obs)
 
         new_obs, rew, done, info = env.step(action)
         if partial:
             history.append(new_obs)
+            new_obs = np.asarray(history).reshape(1, -1)
         ep_rew += rew
 
         # Store transition
-        transition = deque((obs, action, rew, new_obs, done))
+        transition = deque((obs, action, rew, new_obs, done, info))
         yield transition
 
         if done:
-            # print("Terminated after %s timesteps with reward %s" % (str(t+1), str(ep_rew)))
             break
 
         obs = new_obs
@@ -56,12 +56,38 @@ def get_trajectories(env, agent, render=False, min_transitions=512):
     """
     data = deque()
     num_transitions = 0
+
+    num_timeout = 0.0
+    num_success = 0.0
+    num_collisions = 0.0
+
+    num_ep = 0.0
     while True:
         for transition in rollout(env, agent, render):
+
+            info = transition.pop()
+            if transition[-1]:
+                num_ep += 1.0
+                if info == 1:
+                    num_success += 1.0
+                elif info == 2:
+                    num_timeout += 1.0
+                elif info == 3:
+                    num_collisions += 1.0
             data.append(transition)
             num_transitions += 1
 
         if num_transitions > min_transitions:
+            if num_ep:
+                scale = 100 / num_ep
+                print("--------------------------------------------")
+                print("Success percentage: %f" % (num_success * scale))
+                print("Collision percentage: %f" % (num_collisions * scale))
+                print("Timeout percentage: %f" % (num_timeout * scale))
+                print("--------------------------------------------")
+                filename = '/tmp/rl_success.txt'
+                with open(filename, 'a') as f:
+                    f.write("\n%d" % (num_success * scale))
             break
 
     return data

@@ -1,6 +1,7 @@
 from collections import deque
 import random
 
+
 class ReplayBuffer:
     def __init__(self, buffer_size, batch_size):
         self.memory = deque(maxlen=buffer_size)

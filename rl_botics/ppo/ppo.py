@@ -138,8 +138,8 @@ class PPO:
 
         # KL divergence
         self.old_policy = tfp.distributions.Categorical(self.old_act_logits)
-        # self.kl = self.old_policy.kl_divergence(self.policy.act_dist)
-        self.kl = self.policy.act_dist.kl_divergence(self.old_policy)
+        self.kl = self.old_policy.kl_divergence(self.policy.act_dist)
+        # self.kl = self.policy.act_dist.kl_divergence(self.old_policy)
 
         # Loss terms
         loss_1 = self.surrogate_loss
@@ -224,7 +224,7 @@ class PPO:
         act = paths[:, 1].reshape(-1,1)
 
         # Computed expected return, values and advantages
-        expected_return = get_expected_return(paths, self.gamma, normalize=True)
+        expected_return = get_expected_return(paths, self.gamma, True)
         values = self.value.predict(obs)
         adv = expected_return-values
 

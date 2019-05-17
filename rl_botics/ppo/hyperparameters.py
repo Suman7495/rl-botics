@@ -2,7 +2,7 @@
     Default hyperparameters CartPole-v0
 """
 # General hyperparameters
-env_name           = 'LunarLander-v2'
+env_name           = 'CartPole-v0'
 render             = False
 gamma              = 0.99       # discount factor
 maxiter            = 2000      # number of learning iterations
