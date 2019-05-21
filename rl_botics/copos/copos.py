@@ -472,7 +472,7 @@ class COPOS:
                   "--------------------------" % (self.iter, self.avg_rew, surr, kl, ent, self.eta, self.omega))
             filename = '/tmp/rl_ent.txt'
             with open(filename, 'a') as f:
-                f.write("\n%d" % (ent))
+                f.write("\n%f" % (ent))
 
         else:
             print("Failed: Iteration %d. Cause: Optimization 2." % (self.iter))
@@ -506,7 +506,7 @@ class COPOS:
             self.avg_rew = -100
         filename = '/tmp/rl_log.txt'
         with open(filename, 'a') as f:
-            f.write("\n%d" % (self.avg_rew))
+            f.write("\n%f" % (self.avg_rew))
             # print("Average reward: ", self.avg_rew)
 
         # Process paths

@@ -13,7 +13,7 @@ def plot(title,
     x = [(e.strip()) for e in x]
     x = x[1:]
     x = np.asarray([float(e) for e in x])
-    x = pd.Series(x).rolling(10, min_periods=10).mean()
+    # x = pd.Series(x).rolling(10, min_periods=1).mean()
     plt.plot(x)
     if xlabel:
         plt.xlabel(xlabel)
@@ -27,6 +27,6 @@ def plot(title,
 #
 # plot("COPOS", '/tmp/rl_log.txt', 'Iterations', 'Average Reward')
 # plot("Success", '/tmp/rl_success.txt', 'Iterations', 'Success Percentage')
-# plot('Entropy', '/tmp/rl_ent.txt', 'Iterations', 'Mean Entropy')
+plot('Entropy', '/tmp/rl_ent.txt', 'Iterations', 'Mean Entropy')
 
 # plot("COPOS - FVRS")

@@ -87,7 +87,7 @@ def get_trajectories(env, agent, render=False, min_transitions=512):
                 print("--------------------------------------------")
                 filename = '/tmp/rl_success.txt'
                 with open(filename, 'a') as f:
-                    f.write("\n%d" % (num_success * scale))
+                    f.write("\n%f" % (num_success * scale))
             break
 
     return data
