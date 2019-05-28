@@ -27,6 +27,5 @@ def plot(title,
 #
 # plot("COPOS", '/tmp/rl_log.txt', 'Iterations', 'Average Reward')
 # plot("Success", '/tmp/rl_success.txt', 'Iterations', 'Success Percentage')
-plot('Entropy', '/tmp/rl_ent.txt', 'Iterations', 'Mean Entropy')
 
 # plot("COPOS - FVRS")

@@ -1,8 +1,8 @@
 import numpy as np
-import random
 import matplotlib.pyplot as plt
 from gym.spaces import Discrete
 from collections import deque
+
 
 class ContinuousTable:
     """
@@ -10,23 +10,22 @@ class ContinuousTable:
     """
     def __init__(self,
                  sizes=None,
-                 n_clean=3,
-                 n_dirty=2,
-                 n_human=1,
+                 max_clean=3,
+                 max_dirty=3,
+                 max_human=2,
                  obj_width=0.1,
                  cam_loc=None,
                  partial=True,
                  noise=False,
                  cam_view=False,
-                 static=False,
                  time_limit=None,
-                 hist_len=5
+                 hist_len=8
                  ):
         """
         :param sizes:       Array of sizes of the grid such that: low <= x < high, low < y < high
-        :param n_clean:     (int) Number of clean objects
-        :param n_dirty:     (int) Number of dirty objects
-        :param n_human:     (int) Number of humans
+        :param max_clean:   (int) Number of clean objects
+        :param max_dirty:   (int) Number of dirty objects
+        :param max_human:   (int) Number of humans
         :param cam_loc:     (Numpy array of shape (1,2) ) Camera location (fixed)
         :param partial:     (Boolean) True if POMDP, else, MDP
         :param noise:       (Boolean) True if noisy observation
@@ -55,22 +54,28 @@ class ContinuousTable:
             self.cam_loc[0, 1] = -1.0
         self.cam_view = cam_view
 
-        # Number of dishes and humans
-        self.num_clean_dish = n_clean
-        self.num_dirty_dish = n_dirty
-        self.num_human = n_human
-        self.tot_obj = self.num_clean_dish + self.num_dirty_dish + self.num_human
-        self.obj_types = ["c"] * self.num_clean_dish + \
-                        ["d"] * self.num_dirty_dish + \
-                        ["h"] * self.num_human
+        # Max objects on the table
+        self.max_clean = max_clean
+        self.max_dirty = max_dirty
+        self.max_human = max_human
+        self.max_tot_obj = self.max_clean + self.max_dirty + self.max_human
+
+        # Max object types
+        self.max_obj_types = ["c"] * self.max_clean + \
+                        ["d"] * self.max_dirty + \
+                        ["h"] * self.max_human
+        self.max_types =  np.array([1.0] * self.max_clean + \
+                     [2.0] * self.max_dirty + \
+                     [3.0] * self.max_human)
+
+        # Generate objects
+        self._gen_obj()
+
+        # Object width
         self.obj_width = obj_width
 
         # Generate Grid
-        self.grid = np.zeros((self.tot_obj, 4))
         self._gen_grid()
-        self.static = static
-        if self.static:
-            self.init_grid = self.grid
 
         # Move and Remove locations
         self.move_loc = np.asarray([self.low-1, 0])
@@ -78,20 +83,26 @@ class ContinuousTable:
 
         # Observation and Action dimensions
         self.hist_len = hist_len
-        self.action_space = Discrete(self.tot_obj * 2 + 2)
+        # self.action_space = Discrete(self.tot_obj * 2 + 2)
+        # if self.partial:
+        #     self.observation_space = Discrete(4 * self.tot_obj * self.hist_len)
+        # else:
+        #     self.observation_space = Discrete(4 * self.tot_obj)
+
+        self.action_space = Discrete(self.max_tot_obj * 2 + 2)
         if self.partial:
-            self.observation_space = Discrete(4 * self.tot_obj * self.hist_len)
+            self.observation_space = Discrete(4 * self.max_tot_obj * self.hist_len)
         else:
-            self.observation_space = Discrete(4 * self.tot_obj)
+            self.observation_space = Discrete(4 * self.max_tot_obj)
 
         # Time limit
         self.t = 0
         if time_limit:
             self.t_lim = time_limit
         elif self.partial:
-            self.t_lim = self.tot_obj * 4
+            self.t_lim = self.max_tot_obj * 4
         else:
-            self.t_lim = self.tot_obj * 3
+            self.t_lim = self.max_tot_obj * 3
 
         # History
         self.history = deque(maxlen=self.hist_len)
@@ -100,11 +111,30 @@ class ContinuousTable:
         self.fig = plt.figure()
         self.ax = self.fig.add_subplot(1, 1, 1)
 
+    def _gen_obj(self):
+        """
+        Generate objects on the table such that number of objects less than max values
+        """
+        # self.num_clean_dish = self.max_clean
+        # self.num_dirty_dish = self.max_dirty
+        # self.num_human = self.max_human
+
+        self.num_clean_dish = np.random.randint(1, self.max_clean+1)
+        self.num_dirty_dish = np.random.randint(1, self.max_dirty+1)
+        self.num_human = np.random.randint(1, self.max_human+1)
+
+        self.tot_obj = self.num_clean_dish + self.num_dirty_dish + self.num_human
+        self.obj_types = ["c"] * self.num_clean_dish + \
+                         ["d"] * self.num_dirty_dish + \
+                         ["h"] * self.num_human
+        self.types = np.array([1.0] * self.num_clean_dish +
+                              [2.0] * self.num_dirty_dish +
+                              [3.0] * self.num_human)
+
     def _gen_pos(self):
         """
         :return: (float) x, y
         """
-        #TODO: Ensure position is not taken
         mu = 0
         sigma = 0.3
         pos = np.random.normal(mu, sigma, size=2)
@@ -121,16 +151,22 @@ class ContinuousTable:
             [x2, y2, in_view, type]
                     :
             [xN, yN, in_view, type]
+
+            in_view: 1 if in view else -1
+            type:   1 clean, 2 dirty, 3 human, -2 unkown
         """
+        self.grid = np.zeros((self.tot_obj, 4))
         for obj_id in range(self.tot_obj):
             x, y = self._gen_pos()
             in_view = 1.0               # Fully visible grid. Mask it later during observation gneration
             if self.obj_types[obj_id] == "c":
                 type = 1.0
             elif self.obj_types[obj_id] == "d":
-                type = -1.0
+                type = 2.0
+            elif self.obj_types[obj_id] == "h":
+                type = 3.0
             else:
-                type = 0.0
+                type = -2.0
             self.grid[obj_id] = np.asarray([x, y, in_view, type])
 
     def _gen_occlusions(self):
@@ -139,6 +175,7 @@ class ContinuousTable:
         """
         oc_grid = self.grid
         oc_grid[:, 2] = 1.0
+        oc_grid[:, 3] = self.types
         c = np.squeeze(self.cam_loc)
         pos = oc_grid[:, :2]
 
@@ -174,7 +211,9 @@ class ContinuousTable:
                     if db < 0:
                         # Point P is on the LEFT of the line (CB)
                         occluded.append(j)
+                        # Set in_view to -1 and obj_type to unknown
                         oc_grid[j, 2] = -1.0
+                        oc_grid[j, 3] = -2.0
 
         self.grid = oc_grid
 
@@ -184,24 +223,19 @@ class ContinuousTable:
         """
         if self.partial:
             self._gen_occlusions()
-            obs = self.grid.reshape(1, -1)
-        else:
-            # Return full grid as a row vector 1x(Rows*Cols)
-            obs = self.grid.reshape(1, -1)
-
-        if self.noise:
-            # Mask observation with noise
-            mask = np.random.randint(0, 2, size=obs.shape).astype(np.bool)
-            noise = np.random.randint(0, self.tot_obj, size=obs.shape)
-            obs[mask] = noise[mask]
 
         # Add observation to history
+        obs = self.grid.reshape(1, -1)
+        zeros_padding = -10 * np.ones((1, self.max_tot_obj * 4 - obs.shape[1]))
+        obs = np.concatenate([obs, zeros_padding], axis=1)
         self.history.append(obs)
+
+        # Return history if partial observability
         if self.partial:
             obs_hist = np.concatenate(np.asarray(self.history)).reshape(1, -1)
-            zeros_padding = np.zeros((1, self.observation_space.n - obs_hist.shape[1]))
+            zeros_padding = -10 * np.ones((1, self.observation_space.n - obs_hist.shape[1]))
             obs_hist = np.concatenate([obs_hist, zeros_padding], axis=1)
-            assert obs_hist.shape[1]==self.observation_space.n
+            assert obs_hist.shape[1] == self.observation_space.n, "History not same shape as observation_space"
             return obs_hist
         else:
             return obs
@@ -231,21 +265,19 @@ class ContinuousTable:
         """
             Plot grid.
         """
-        # print("Grid:\n ", self.grid, "\n")
         plt.cla()
         # Create variables for plotting
         visible = self.grid[self.grid[:, 2] == 1]
-        # print("Visible:\n ", visible, "\n")
 
         # Generate clean, dirty and humans which are visible
-        clean = visible[visible[:, -1] ==  1][:, :2]
-        dirty = visible[visible[:, -1] == -1][:, :2]
-        human = visible[visible[:, -1] ==  0][:, :2]
+        clean = visible[visible[:, -1] == 1][:, :2]
+        dirty = visible[visible[:, -1] == 2][:, :2]
+        human = visible[visible[:, -1] == 3][:, :2]
 
         # Generate occlusions
         occluded = self.grid[self.grid[:, 2] == -1][:, :2]
-        # print("Occludeed:\n ", occluded)
 
+        # Arrays for plotting
         data = [clean, dirty, human, occluded, self.cam_loc]
         colors = ["blue", "green", "red", "black", "black"]
         groups = ["Clean", "Dirty", "Human", "Occlusion", "Camera"]
@@ -281,10 +313,8 @@ class ContinuousTable:
         :return: Observation (see self._gen_obs() )
         """
         self.t = 0
-        if self.static:
-            self.grid = self.init_grid
-        else:
-            self._gen_grid()
+        self._gen_obj()
+        self._gen_grid()
         return self._gen_obs()
 
     def step(self, action):
@@ -305,27 +335,22 @@ class ContinuousTable:
         if action == 0:     # Done action
             # Get indexes of each object
             removed_obj_idx = np.nonzero(self.grid[:, 0] == self.remove_loc[0])
-            removed_obj_types = self.grid[removed_obj_idx, -1]
-            num_c = np.sum(removed_obj_types == 1)
-            num_d = np.sum(removed_obj_types == -1)
-            num_h = np.sum(removed_obj_types == 0)
-            if num_h:
-                info = 3
-                rew = -56
+            removed_obj_types = self.types[removed_obj_idx]
 
-            # Compute reward wrt to the remaining objects
-            cost1 = -32 * num_c                              # Removed clean dishes (-)
-            cost2 =  18 * num_d                              # Removed dirty dishes (+)
-            cost3 =  3  * (self.num_clean_dish - num_c)      # Remaining clean dishes (+)
-            cost4 = -25 * (self.num_dirty_dish - num_d)      # Remaining dirty dishes (-)
-            rew = cost1 + cost2 + cost3 + cost4
-            if num_d == self.num_dirty_dish and num_c == 0 and num_h == 0:
-                rew = 100
+            # Compute number of removed clean, dirty and humans
+            num_c = np.sum(removed_obj_types == 1)
+            num_d = np.sum(removed_obj_types == 2)
+            num_h = np.sum(removed_obj_types == 3)
+            if num_h:
+                rew = -56
+                info = 3
+                done = True
+            elif num_d == self.num_dirty_dish and num_c == 0 and num_h == 0:
+                rew = 150
                 info = 1
                 done = True
             else:
                 rew = -30
-                # print("Number of clean/ dirty dishes removed: ", num_c, num_h)
 
         elif action == 1:    # Do nothing action
             rew = -1
@@ -339,16 +364,15 @@ class ContinuousTable:
                 rew = -7
             elif obj_type == "h":     # Collision!
                 rew = -56
-                done = True
                 info = 3
-
-            else:       # Moving clean dish
+                done = True
+            else:       # Moving dish
                 rew = -1
-                if (self.grid[obj_id, 0:2] == self.move_loc).all():
+                if (self.grid[obj_id, 0:2] == self.move_loc).all(): # Move from move_loc to table
                     x, y = self._gen_pos()
                     self.grid[obj_id, 0:2] = (x, y)
                 else:
-                    self.grid[obj_id, 0:2] = self.move_loc
+                    self.grid[obj_id, 0:2] = self.move_loc          # Move from table to move_loc
 
         elif action <= 2 * self.tot_obj + 1:     # Remove object from table
             obj_id = action - self.tot_obj - 2
@@ -358,8 +382,8 @@ class ContinuousTable:
                 rew = -7
             elif obj_type == "h":     # Collision!
                 rew = -56
-                done = True
                 info = 3
+                done = True
             elif obj_type == "d":   # Remove dirty object
                 rew = 17
                 self.grid[obj_id, 0:2] = self.remove_loc
@@ -367,16 +391,17 @@ class ContinuousTable:
                 rew = -11
                 self.grid[obj_id, 0:2] = self.remove_loc
         else:
-            print("Unrecognized action: ", action)
+            rew = -50
+            # print("Unrecognized action: ", action)
 
         # Update human position
         self.update_human_pos()
 
         # Test if time has exceeded limit
         if self.t > self.t_lim:
-            done = True
-            rew = -15
+            rew = -40
             info = 2
+            done = True
 
         obs = self._gen_obs()
         return obs, rew, done, info
