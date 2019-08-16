@@ -4,25 +4,24 @@ from gym.spaces import Discrete
 from collections import deque
 
 
-class ContinuousTable:
+class StochasticContinuousTable:
     """
         Table Environment with clean and dirty dishes during Human Robot Collaboration
+        Humans can now add and remove objects from the scene.
     """
     def __init__(self,
                  sizes=None,
-                 max_clean=10,
-                 max_dirty=10,
+                 max_clean=4,
+                 max_dirty=4,
                  max_human=1,
                  obj_width=0.1,
-                 rand_obj=False,
+                 rand_obj=True,
                  cam_loc=None,
                  partial=True,
                  noise=True,
                  cam_view=False,
                  time_limit=None,
-                 hist_len=8,
-                 seed=None,
-                 motion_type="random"
+                 hist_len=8
                  ):
         """
         :param sizes:       Array of sizes of the grid such that: low <= x < high, low < y < high
@@ -72,14 +71,7 @@ class ContinuousTable:
                                   [2.0] * self.max_dirty +
                                   [3.0] * self.max_human)
 
-        self.motion_type = motion_type
-
-        # Episode count
-        self.ep_count = 0
-
-        # Generate objects and Move, Remove actions
-        self.move_actions = []
-        self.remove_actions = []
+        # Generate objects
         self.rand_obj = rand_obj
         self._gen_obj()
 
@@ -95,6 +87,10 @@ class ContinuousTable:
         # Move and Remove locations
         self.move_loc = np.asarray([self.low-1, 0])
         self.remove_loc = np.asarray([self.high+1, 0])
+
+        # Move and Remove action lists
+        self.move_actions = []
+        self.remove_actions = []
 
         # Observation and Action dimensions
         self.hist_len = hist_len
@@ -125,43 +121,22 @@ class ContinuousTable:
         self.fig = plt.figure()
         self.ax = self.fig.add_subplot(1, 1, 1)
 
-        self.action_count = 0
-
     def _set_rewards(self):
         """
         Set rewards
         """
-        # Rewards
-        self.success_reward = 15
-        self.dirty_dish_removed_reward = 10
-
-        # Penalties
-        self.collision_penalty = -15
-        self.time_limit_penalty = -15
-        self.clean_dish_removed_penalty = -10
-        self.redundant_act_penalty = -10
-        self.premature_done_penalty = -5
-        self.wrong_attempt_penalty = -5
-        self.action_penalty = -1
-
-        # # Rewards
-        # self.success_reward = 1
-        # self.dirty_dish_removed_reward = 0.2
-        #
-        # # Penalties
-        # self.collision_penalty = -1
-        # self.time_limit_penalty = -1
-        # self.clean_dish_removed_penalty = 0
-        # self.redundant_act_penalty = 0
-        # self.premature_done_penalty = 0
-        # self.wrong_attempt_penalty = 0
-        # self.action_penalty = 0
+        self.collision_penalty = -156
+        self.time_limit_penalty = -40
+        self.success_rew = 150
 
     def _gen_obj(self):
         """
         Generate objects on the table such that number1of objects less than max values
         """
         if self.rand_obj:
+            c_lb = self.max_clean
+            d_lb = self.max_dirty
+            h_lb = self.max_human
             self.num_clean_dish = np.random.randint(1, self.max_clean+1)
             self.num_dirty_dish = np.random.randint(1, self.max_dirty+1)
             self.num_human = np.random.randint(1, self.max_human+1)
@@ -182,6 +157,7 @@ class ContinuousTable:
         self.move_actions = np.arange(1, self.tot_obj+1)
         self.remove_actions = np.arange(self.max_tot_obj+1, self.max_tot_obj + self.tot_obj+1)
         # print(self.tot_obj, self.move_actions, self.remove_actions)
+
 
         assert self.move_actions.shape[0] == self.tot_obj
         assert self.remove_actions.shape[0] == self.tot_obj
@@ -208,7 +184,7 @@ class ContinuousTable:
             [xN, yN, in_view, type]
 
             in_view: 1 if in view else -1
-            type:   1 clean, 2 dirty, 3 human, -2 unknown
+            type:   1 clean, 2 dirty, 3 human, -2 unkown
         """
         self.grid = np.zeros((self.tot_obj, 4))
         self.oc_grid = np.zeros((self.tot_obj, 4))
@@ -225,17 +201,11 @@ class ContinuousTable:
                 obj_type = -2.0
             self.grid[obj_id] = np.asarray([x, y, in_view, obj_type])
 
-        if self.motion_type == "linear":
-            self.initial_human_pos = self.grid[-self.num_human:, :2]
-            epsilon = float(self.obj_width)/2.0
-            dpos = np.random.uniform(-epsilon, epsilon, size=(self.num_human, 2))
-            self.human_goal_pos = self.grid[:self.num_human, :2] + dpos
-
-
     def _gen_occlusions(self):
         """
             Add occlusions to objects in the grid.
         """
+        # self.oc_grid = self.grid.copy()
         self.oc_grid[:, 2] = 1.0
         # self.oc_grid[:, 3] = self.types
         c = np.squeeze(self.cam_loc)
@@ -254,8 +224,8 @@ class ContinuousTable:
         # For each object, check if the objects behind are occluded or not
         for count, i in enumerate(sorted_indices):
             # a, b, are (approximate) tangency points originating from camera till object periphery
-            a = pos[i] + np.asarray([-self.obj_width*0.75, 0.0])
-            b = pos[i] + np.asarray([self.obj_width*0.75, 0.0])
+            a = pos[i] + np.asarray([-self.obj_width, 0.0])
+            b = pos[i] + np.asarray([ self.obj_width, 0.0])
             self.a_list.append(a)
             self.b_list.append(b)
 
@@ -273,12 +243,17 @@ class ContinuousTable:
                     if db < 0:
                         # Point P is on the LEFT of the line (CB)
                         occluded.append(j)
+                        # Set in_view to -1 and obj_type to unknown
+                        # self.oc_grid[j, 2] = -1.0
+                        # self.oc_grid[j, 3] = -2.0
                         self.oc_grid[j, :] = -10.0
                         # print("Changed oc grid:\n", self.oc_grid == self.grid)
 
+        # self.grid = oc_grid
+
     def _gen_obs(self):
         """
-        :return: Flattened observation as row-vector - 1x(4*total_objects*hist_length)
+        :return: Flattened observation as row-vector - 1x(4*total_objects)
         """
         self.oc_grid = self.grid.copy()
         if self.partial:
@@ -286,15 +261,9 @@ class ContinuousTable:
 
         # Add noise
         if self.noise:
-            # Add noise to a third of the objects, only if not occluded
-            for i in range(int(self.tot_obj/3)):
+            for _ in range(int(self.tot_obj/3)):
                 id = np.random.randint(0, self.tot_obj)
-                if self.oc_grid[id, 3] != -10:
-                    types = [1, 2, 3]
-                    actual_type = self.oc_grid[id, 3]
-                    types.remove(actual_type)
-                    self.oc_grid[id, 3] = np.random.choice(types)
-                    # print("Added noise to id", id)
+                self.oc_grid[id, :] = -10
 
         # Add observation to history
         obs = self.oc_grid.reshape(1, -1)
@@ -328,18 +297,10 @@ class ContinuousTable:
         """
             Add dynamic motion for human
         """
+        # TODO: Ensure human stays inside the table
         human_pos = self.grid[-self.num_human:, :2]
-        if self.motion_type == "random":
-            max_dx = 0.1
-            dpos = np.random.uniform(-max_dx, max_dx, size=(self.num_human, 2))
-        elif self.motion_type == "linear":
-            dpos = np.asarray([0, 0])
-            # Define goal as any object location. If current pos in delta region of goal pos, new goal pos.
-            # Maybe add a goal pos at the edge of the screen?
-            # How to make object move linearly to goal? Define start human pos, goal pos, and fix dx and dy.
-        else:
-            # Static human
-            dpos = np.zeros((self.num_human, 2))
+        max_dx = 0.1
+        dpos = np.random.uniform(-max_dx, max_dx, size=(self.num_human, 2))
         human_pos = human_pos + dpos
         self.grid[-self.num_human:, :2] = human_pos
 
@@ -370,7 +331,7 @@ class ContinuousTable:
         for d, color, group, m in zip(data, colors, groups, marker):
             x = d[:, 0]
             y = d[:, 1]
-            self.ax.scatter(x, y, alpha=0.8, c=color, edgecolors='none', s=self.obj_width / 0.1 * 750, label=group, marker=m)
+            self.ax.scatter(x, y, alpha=0.8, c=color, edgecolors='none', s=750, label=group, marker=m)
 
         # Plot lines showing view-angles
         if self.cam_view:
@@ -396,9 +357,6 @@ class ContinuousTable:
             Reset environment
         :return: Observation (see self._gen_obs() )
         """
-        # print("Number of actions: ", self.action_count)
-        self.action_count = 0
-        self.ep_count += 1
         # if self.t:
         #     print("Uselss action percentage: %.1f " % (self.redundant_actions/self.t*100))
         # Reset
@@ -419,13 +377,13 @@ class ContinuousTable:
         :param action: (int) Action to take on the grid
         :return: Observation, Reward, Done, Info
         """
+
         self.t += 1
         # print(self.t)
         info = None
         done = False
         rew = 0.0
         if action == 0:     # Done action
-            # print("Done!")
             # Get indexes of each object
             removed_obj_idx = np.nonzero(self.grid[:, 0] == self.remove_loc[0])
             removed_obj_types = self.types[removed_obj_idx]
@@ -439,64 +397,66 @@ class ContinuousTable:
                 info = 3
                 done = True
             elif num_d == self.num_dirty_dish and num_c == 0 and num_h == 0:
-                rew = self.success_reward
+                rew = self.success_rew
                 info = 1
                 done = True
             else:
-                rew = self.premature_done_penalty
+                rew = -30
 
+        # elif action == 1:    # Do nothing action
+        #     self.do_nothing_count += 1
+        #     rew = -1
+
+        # elif action <= self.tot_obj:     # Move object
         elif np.isin(action, self.move_actions):
             obj_id = action - 1
-            # print("Moving ", obj_id)
             obj_type = self._get_obj_type(obj_id)
 
             # Has object already been removed?
             if (self.grid[obj_id, 0] == self.remove_loc[0]).all():
-                rew = self.wrong_attempt_penalty
+                rew = -7
             elif obj_type == "h":     # Collision!
                 rew = self.collision_penalty
                 info = 3
                 done = True
             else:       # Moving dish
                 rew = -1
-                if (self.grid[obj_id, 0:2] == self.move_loc).all():  # Move from move_loc to table
+                if (self.grid[obj_id, 0:2] == self.move_loc).all(): # Move from move_loc to table
                     x, y = self._gen_pos()
                     self.grid[obj_id, 0:2] = (x, y)
-                elif self.oc_grid[obj_id, 0] == -10:       # If object is invisible, you can't pick it up
-                    rew = self.wrong_attempt_penalty
                 else:
                     self.grid[obj_id, 0:2] = self.move_loc          # Move from table to move_loc
 
+        # elif action <= 2 * self.tot_obj:     # Remove object from table
         elif np.isin(action, self.remove_actions):
             obj_id = action - self.max_tot_obj - 1
             obj_type = self._get_obj_type(obj_id)
-            # print("Removing object ", obj_id)
+            # print("Removing object with ID: ", obj_id)
 
             if (self.grid[obj_id, 0:2] == self.remove_loc).all():  # Has object already been removed?
-                rew = self.wrong_attempt_penalty
+                rew = -7
             elif obj_type == "h":     # Collision!
                 rew = self.collision_penalty
                 info = 3
                 done = True
-            elif self.oc_grid[obj_id, 0] == -10:           # If the object is invisible, you can't pick it up
-                rew = self.wrong_attempt_penalty
             elif obj_type == "d":   # Remove dirty object
-                rew = self.dirty_dish_removed_reward
+                rew = 17
                 self.grid[obj_id, 0:2] = self.remove_loc
             else:                   # Remove clean object
-                rew = self.clean_dish_removed_penalty
+                rew = -11
                 self.grid[obj_id, 0:2] = self.remove_loc
-
         else:
             self.redundant_actions += 1
-            rew = self.redundant_act_penalty
+            rew = -50
             # print("Useless action: ", action, self.tot_obj)
 
         # Update human position
-        if self.num_human > 0:
-            self.update_human_pos()
+        self.update_human_pos()
 
-        self.action_count += 1
+        # Randomly add an object to the scene
+        if np.random.rand() > 0.7:
+
+        # Randomly remove an object from the scene
 
         # Test if time has exceeded limit
         if self.t > self.t_lim:

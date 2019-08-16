@@ -3,7 +3,7 @@ import numpy as np
 import gym, gym.spaces
 
 
-def rollout(env, agent, render=False, timestep_limit=1000, partial=False, hist_size=25):
+def rollout(env, agent, render=False, timestep_limit=1000, partial=False, hist_size=25, show_distribution=False):
     """
         Execute one episode
     """
@@ -19,10 +19,9 @@ def rollout(env, agent, render=False, timestep_limit=1000, partial=False, hist_s
             env.render()
         if partial:
             obs = np.asarray(history).reshape(1, -1)
-            action = agent.pick_action(obs)
+            action = agent.pick_action(obs, show_distribution)
         else:
             action = agent.pick_action(obs)
-
         new_obs, rew, done, info = env.step(action)
         if partial:
             history.append(new_obs)
@@ -39,7 +38,7 @@ def rollout(env, agent, render=False, timestep_limit=1000, partial=False, hist_s
         obs = new_obs
 
 
-def get_trajectories(env, agent, render=False, min_transitions=512):
+def get_trajectories(env, agent, render=False, min_transitions=512, show_distribution=False, filename=None):
     """
     :param env: Environment
     :param agent: Policy pi
@@ -63,7 +62,7 @@ def get_trajectories(env, agent, render=False, min_transitions=512):
 
     num_ep = 0.0
     while True:
-        for transition in rollout(env, agent, render):
+        for transition in rollout(env, agent, render, show_distribution=show_distribution):
 
             info = transition.pop()
             if transition[-1]:
@@ -85,7 +84,7 @@ def get_trajectories(env, agent, render=False, min_transitions=512):
                 print("Collision percentage: %f" % (num_collisions * scale))
                 print("Timeout percentage: %f" % (num_timeout * scale))
                 print("--------------------------------------------")
-                filename = '/tmp/rl_success.txt'
+                # filename = 'results/ppo_success_4_4_2.txt'
                 with open(filename, 'a') as f:
                     f.write("\n%f" % (num_success * scale))
             break

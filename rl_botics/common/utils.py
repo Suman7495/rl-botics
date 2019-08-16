@@ -1,5 +1,5 @@
 import numpy as np
-
+import tensorflow as tf
 
 def get_expected_return(paths, gamma, normal=True):
     """
@@ -30,3 +30,25 @@ def normalize(x):
     :return: normalized x
     """
     return (x - np.mean(x)) / np.std(x)
+
+
+def save_model(fname="model.ckpt"):
+    """
+    Save trained model
+    :param fname: File path with name
+    :param sess: Tf Session
+    :return:
+    """
+    saver = tf.train.Saver()
+    saver.save(tf.get_default_session(), fname)
+
+
+def load_model(fname, sess):
+    """
+    Load previously saved model
+    :param fname:
+    :return:
+    """
+    saver = tf.train.import_meta_graph(fname + '.meta')
+    # saver.restore(tf.get_default_session(), fname)
+    saver.restore(sess, fname)

@@ -17,7 +17,15 @@ class PPO:
         """
         self.sess = sess
         self.env = env
-        open('/tmp/rl_log.txt', 'w').close()
+
+        self.f_ent = 'results/final/ppo_ent_10_10_1.txt'
+        self.f_success = 'results/final/ppo_success_10_10_1.txt'
+        self.f_rew = 'results/final/ppo_rew_10_10_1.txt'
+
+        open(self.f_rew, 'w').close()
+        open(self.f_success, 'w').close()
+        open(self.f_ent, 'w').close()
+
         try:
             self.obs_dim = self.env.observation_space.shape[0]
         except:
@@ -170,10 +178,12 @@ class PPO:
 
             :param feed_dict: Dictionary to feed into tensorflow graph
         """
+        mean_ent = 0
         for _ in range(self.n_policy_epochs):
             self.sess.run(self.policy_train_op, feed_dict=feed_dict)
             neg_policy_loss, kl, ent = self.sess.run(self.losses, feed_dict=feed_dict)
             mean_kl = np.mean(kl)
+            mean_ent = np.mean(ent)
             if mean_kl > 4 * self.kl_target:
                 break
 
@@ -182,6 +192,14 @@ class PPO:
         elif mean_kl > self.kl_target * 1.5:
             self.beta *= 2
         self.beta = np.clip(self.beta, self.beta_min, self.beta_max)
+        with open(self.f_ent, 'a') as f:
+            f.write("\n%f" % (mean_ent))
+        # Print Results
+        print("\n---------Iter %d---------- \n"
+              "Avg Reward: %f             \n"
+              "KL:         %f             \n"
+              "Entropy:    %f             \n"
+              "--------------------------" % (self.iter, self.avg_rew, mean_kl, mean_ent))
 
     def update_value(self, prev_feed_dict):
         """
@@ -208,13 +226,12 @@ class PPO:
         tot_rew = np.sum(paths[:, 2])
         ep_count = np.sum(paths[:, -1])
         avg_rew = tot_rew / ep_count
-        filename = '/tmp/rl_log.txt'
-        with open(filename, 'a') as f:
+        with open(self.f_rew, 'a') as f:
             f.write("\n%d" % (avg_rew))
-            print("Average reward: ", avg_rew)
+        self.avg_rew = avg_rew
 
         # Process paths
-        if self.obs_dim>1:
+        if self.obs_dim > 1:
             obs = np.concatenate(paths[:, 0]).reshape(-1, self.obs_dim)
             new_obs = np.concatenate(paths[:, 3]).reshape(-1, self.obs_dim)
         else:
@@ -246,13 +263,15 @@ class PPO:
         """
             Train using PPO algorithm
         """
-        paths = get_trajectories(self.env, self.policy, self.render, self.min_trans_per_iter)
+        self.iter = 0
+        paths = get_trajectories(self.env, self.policy, self.render, self.min_trans_per_iter, filename=self.f_success)
         dct = self.process_paths(paths)
         self.update_policy(dct)
         prev_dct = dct
 
         for itr in range(self.maxiter):
-            paths = get_trajectories(self.env, self.policy, self.render, self.min_trans_per_iter)
+            self.iter = itr + 1
+            paths = get_trajectories(self.env, self.policy, self.render, self.min_trans_per_iter, filename=self.f_success)
             dct = self.process_paths(paths)
 
             # Update Policy
@@ -273,5 +292,5 @@ class PPO:
             Plot the results
         """
         # TODO: Finish this section
-        plot("PPO")
+        # plot("PPO")
         return

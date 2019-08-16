@@ -14,8 +14,9 @@ import hyperparameters as h
 from utils import *
 from pprint import pprint
 
+
 class COPOS:
-    def __init__(self, args, sess, env):
+    def __init__(self, args, sess, env, f_ent, f_succ, f_rew):
         """
         Initialize COPOS class
         """
@@ -27,15 +28,24 @@ class COPOS:
             self.obs_dim = self.env.observation_space.n
         self.act_dim = self.env.action_space.n
 
-
+        print(self.obs_dim)
         print(self.act_dim)
+
         self.render = args.render
         self.env_continuous = False
         self.filename = 'COPOS_log.txt'
-        open('/tmp/rl_log.txt', 'w').close()
-        open('/tmp/rl_success.txt', 'w').close()
-        open('/tmp/rl_ent.txt', 'w').close()
 
+        # self.f_ent = 'results/final/copos_ent_3_3_1.txt'
+        # self.f_success = 'results/final/copos_success_3_3_1.txt'
+        # self.f_rew = 'results/final/copos_rew_3_3_1.txt'
+
+        self.f_ent = f_ent
+        self.f_success = f_succ
+        self.f_rew = f_rew
+
+        open(self.f_rew, 'w').close()
+        open(self.f_success, 'w').close()
+        open(self.f_ent, 'w').close()
 
         # Hyperparameters
         self.gamma = args.gamma
@@ -266,8 +276,8 @@ class COPOS:
 
         # Obtain Compatible Weights w by Conjugate Gradient (alternative: minimise MSE which is more inefficient)
         w = cg(f_Ax=get_hvp, b=-pg)
-        # self.trpo_update(w, feed_dict)
-        self.copos_update(w, feed_dict)
+        self.trpo_update(w, feed_dict)
+        # self.copos_update(w, feed_dict)
 
     def trpo_update(self, stepdir, feed_dict):
         def get_pg():
@@ -287,19 +297,29 @@ class COPOS:
 
         step_size = 1.0
         shs = 0.5 * stepdir.dot(get_hvp(stepdir))
+        if shs <= 0:
+            print("Found negative shs in TRPO. TRPO failed.")
+            self.set_flat_params(prev_params)
         lm = np.sqrt(shs / self.kl_bound)
         fullstep = stepdir / lm
         expected_improve_rate = -pg.dot(stepdir) / lm
 
         # Perform Linesearch to rescale update stepsize
         for itr in range(20):
+            print("In linesearch")
             new_params = prev_params + fullstep * step_size
             surr_loss, kl, ent = get_loss(new_params)
             mean_kl = np.mean(kl)
             surr_loss = np.mean(surr_loss)
             improve = surr_loss - surr_before
-            expected_improve = expected_improve_rate * step_size
-            ratio = improve / expected_improve
+            if np.isnan(np.array([mean_kl, surr_loss, np.mean(ent)])).any():
+                print("TRPO got NaN. Keeping old params.")
+                if np.isnan(prev_params).any():
+                    print("Previous parameters have NaNs.")
+                self.set_flat_params(prev_params)
+                return
+            # expected_improve = expected_improve_rate * step_size
+            # ratio = improve / expected_improve
             if mean_kl > self.kl_bound * 1.5:
                 print("KL bound exceeded.")
             elif improve > 0:
@@ -312,10 +332,13 @@ class COPOS:
                       "KL:         %f             \n"
                       "Entropy:    %f             \n"
                       "--------------------------" % (self.iter, self.avg_rew, surr_loss, mean_kl, np.mean(ent)))
+                with open(self.f_ent, 'a') as f:
+                    f.write("\n%f" % (np.mean(ent)))
+
                 break
             step_size *= .5
         else:
-            print("Failed to update. Keeping old parameters")
+            print("TRPO update failed. Keeping old parameters")
             self.set_flat_params(prev_params)
 
     def copos_update(self, w, feed_dict):
@@ -362,6 +385,8 @@ class COPOS:
 
         # Get previous parameters
         prev_params = self.get_flat_params()
+        if np.isnan(prev_params).any():
+            print("NaN found in previous parameters")
         theta_old = prev_params[0:self.policy.theta_len]
         beta_old = prev_params[self.policy.theta_len:]
 
@@ -378,7 +403,8 @@ class COPOS:
         x0 = np.asarray([1, 0.5])
         bounds = ((1e-12, None), (1e-12, None))
         res, eta, omega = optimize_dual(get_dual, x0, bounds)
-
+        if np.isnan(eta):
+            print(eta)
         if res.success and not np.isnan(eta):
             params1 = None
             new_params = get_new_params()
@@ -389,8 +415,11 @@ class COPOS:
                 self.set_flat_params(params1)
         else:
             print("Failed: Iteration %d. Cause: Optimization 1." %(self.iter))
-            print(res.message)
+            print(res.message, "\nAttempting TRPO update")
+            if np.isnan(prev_params).any():
+                print("NaN found in previous parameters")
             self.set_flat_params(prev_params)
+            self.trpo_update(w, feed_dict)
             return
 
         # Optimization 2 (Binary search)
@@ -470,8 +499,7 @@ class COPOS:
                   "Eta:        %f             \n"
                   "Omega:      %f             \n" 
                   "--------------------------" % (self.iter, self.avg_rew, surr, kl, ent, self.eta, self.omega))
-            filename = '/tmp/rl_ent.txt'
-            with open(filename, 'a') as f:
+            with open(self.f_ent, 'a') as f:
                 f.write("\n%f" % (ent))
 
         else:
@@ -504,8 +532,7 @@ class COPOS:
             self.avg_rew = tot_rew / ep_count
         else:
             self.avg_rew = -100
-        filename = '/tmp/rl_log.txt'
-        with open(filename, 'a') as f:
+        with open(self.f_rew, 'a') as f:
             f.write("\n%f" % (self.avg_rew))
             # print("Average reward: ", self.avg_rew)
 
@@ -545,14 +572,20 @@ class COPOS:
         """
             Train using COPOS algorithm
         """
-        paths = get_trajectories(self.env, self.policy, self.render, self.min_trans_per_iter)
+        paths = get_trajectories(self.env, self.policy, self.render, self.min_trans_per_iter, filename=self.f_success)
         dct = self.process_paths(paths)
         self.update_policy(dct)
         prev_dct = dct
 
         for itr in range(self.maxiter):
             self.iter += 1
-            paths = get_trajectories(self.env, self.policy, self.render, self.min_trans_per_iter)
+            if (self.iter % 50) == 0 and self.iter > 249:
+                show_distribution = False
+                # self.render = True
+            else:
+                self.render = False
+                show_distribution = False
+            paths = get_trajectories(self.env, self.policy, self.render, self.min_trans_per_iter, show_distribution=show_distribution, filename=self.f_success)
             dct = self.process_paths(paths)
 
             # Update Policy
@@ -566,15 +599,19 @@ class COPOS:
 
             # TODO: Log data
         print("Final eta and omega", self.eta, self.omega)
-        self.sess.close()
+        # self.sess.close()
 
     def print_results(self):
         """
             Plot the results
         """
         # TODO: Finish this section
-        plot("COPOS", '/tmp/rl_log.txt', 'Iterations', 'Average Reward')
-        plot("Success", '/tmp/rl_success.txt', 'Iterations', 'Success Percentage')
-        plot('Entropy', '/tmp/rl_ent.txt', 'Iterations', 'Mean Entropy')
-        return
+        plot("Average Reward", self.f_rew, 'Iterations', 'Average Reward', 5)
+        plot("Success Percentage", self.f_success, 'Iterations', 'Success Percentage', 5)
+        plot('Entropy', self.f_ent, 'Iterations', 'Mean Entropy', 5)
 
+    def save(self, fname="model.ckpt"):
+        self.policy.save(fname)
+
+    def restore(self):
+        return

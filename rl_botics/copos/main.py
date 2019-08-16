@@ -1,11 +1,12 @@
 import argparse
-from copos import *
 import tensorflow as tf
-import hyperparameters as h
-import gym, gym.spaces
-import rl_botics.env.gym_pomdp
-from rl_botics.envs.fvrs import *
 from rl_botics.envs.table_continuous import *
+from rl_botics.envs.table_continuous_with_time import *
+from rl_botics.common.utils import save_model
+import rl_botics.copos.hyperparameters as h
+from rl_botics.copos.copos import *
+import os
+import random
 
 def argparser():
     parser = argparse.ArgumentParser()
@@ -21,20 +22,46 @@ def argparser():
     parser.add_argument('--min_trans_per_iter', type=float, default=h.min_trans_per_iter)
     return parser.parse_args()
 
+
 def main():
     """
         Main script
         Default environment: CartPole-v0
     """
     args = argparser()
-    # env = gym.make(args.env)
-    # env = HistoryEnv("Rock-v0", hist_len=15, history_type='field_vision_pos')
-    env = ContinuousTable()
-    with tf.Session() as sess:
-        agent = COPOS(args, sess, env)
-        print("Training agent...\n")
-        agent.train()
-        agent.print_results()
+    max_clean = 3
+    max_dirty = 4
+    max_human = 1
+    for seed in range(0, 10):
+        tf.reset_default_graph()
+        print("\nRunning seed: ", seed)
+        random.seed()
+        extension = str(max_clean) + "_" + str(max_dirty) + "_" + str(max_human) + "_seed_" + str(seed)
+        f_ent = 'results/final/trpo_ent_' + extension + '.txt'
+        f_succ = 'results/final/trpo_success_' + extension + '.txt'
+        f_rew = 'results/final/trpo_rew_' + extension + '.txt'
+        # env = gym.make(args.env)
+        env = ContinuousTable(max_clean=max_clean,
+                              max_dirty=max_dirty,
+                              max_human=max_human,
+                              partial=True,
+                              noise=True,
+                              hist_len=8,
+                              obj_width=0.1
+                              )
+        # env = ContinuousTableWithTime()
+
+        with tf.Session() as sess:
+            agent = COPOS(args, sess, env, f_ent, f_succ, f_rew)
+            print("Training agent...\n")
+            agent.train()
+            # agent.print_results()
+
+            # Save trained policy
+            dirname = "models"
+            if not os.path.exists(dirname):
+                os.makedirs(dirname)
+            save_model(os.getcwd() + "/" + dirname + "/model.ckpt")
 
 
 if __name__ == '__main__':

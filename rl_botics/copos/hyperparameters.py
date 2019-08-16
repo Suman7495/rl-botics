@@ -105,7 +105,7 @@
 env_name           = 'Table-v0'
 render             = False
 gamma              = 0.99       # discount factor
-maxiter            = 5000      # number of learning iterations
+maxiter            = 1000      # number of learning iterations
 min_trans_per_iter = 1024       # minimum number of transition steps per iteration (if an episode ends before min_trans_per_iter is reached, a new one starts)
 
 # TRPO specific hyperparameters
@@ -113,14 +113,14 @@ kl_bound           = 0.01
 ent_bound          = 0.01
 cg_damping         = 1e-1       # conjugate gradient damping (for the diagonal entries)
 
-# # Policy network parameters
+# Policy network parameters
 # pi_sizes           = [128, 128, 64]
 # pi_activations     = ['tanh', 'tanh', 'tanh']
 # pi_layer_types     = ['dense', 'dense', 'dense']
 # pi_lr              = 1e-4
 # pi_batch_size      = 64
 
-
+# Policy network Parameters (working)
 pi_sizes           = [128, 64]
 pi_activations     = ['tanh', 'tanh']
 pi_layer_types     = ['dense', 'dense']
